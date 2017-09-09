@@ -55,7 +55,7 @@
 #include <mqueue.h>
 
 #include <drivers/drv_rc_input.h>
-#include <drivers/drv_led.h>
+#include <drivers/drv_board_led.h>
 
 #include <systemlib/err.h>
 
@@ -414,7 +414,7 @@ Syslink::handle_message(syslink_message_t *msg)
 		memcpy(&vbat, &msg->data[1], sizeof(float));
 		//memcpy(&iset, &msg->data[5], sizeof(float));
 
-		_battery.updateBatteryStatus(t, vbat, -1, 0, false, &_battery_status);
+		_battery.updateBatteryStatus(t, vbat, -1, true, true, 0, 0, false, &_battery_status);
 
 
 		// Update battery charge state
@@ -705,7 +705,7 @@ Syslink::send_bytes(const void *data, size_t len)
 	// TODO: This could be way more efficient
 	//       Using interrupts/DMA/polling would be much better
 
-	for (int i = 0; i < len; i++) {
+	for (size_t i = 0; i < len; i++) {
 		// Block until we can send a byte
 		while (px4_arch_gpioread(GPIO_NRF_TXEN)) ;
 
@@ -804,7 +804,7 @@ void status()
 		printf(", VID: %02X , PID: %02X\n", desc.header, desc.vendorId, desc.productId);
 
 		// Print pages of memory
-		for (int di = 0; di < sizeof(desc); di++) {
+		for (size_t di = 0; di < sizeof(desc); di++) {
 			if (di % 16 == 0) {
 				printf("\n");
 			}

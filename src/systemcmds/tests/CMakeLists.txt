@@ -34,16 +34,16 @@
 set(srcs
 	test_adc.c
 	test_autodeclination.cpp
-#	test_dataman.c # Enable for by hand testing
-	test_hysteresis.cpp
 	test_bson.c
 	test_conv.cpp
+	test_dataman.c
 	test_file.c
 	test_file2.c
 	test_float.cpp
 	test_gpio.c
 	test_hott_telemetry.c
 	test_hrt.c
+	test_hysteresis.cpp
 	test_int.cpp
 	test_jig_voltages.c
 	test_led.c
@@ -51,7 +51,8 @@ set(srcs
 	test_matrix.cpp
 	test_mixer.cpp
 	test_mount.c
-	test_params.c
+	test_param.c
+	test_parameters.cpp
 	test_perf.c
 	test_ppm_loopback.c
 	test_rc.c
@@ -78,7 +79,7 @@ px4_add_module(
 	STACK_MAIN 10000
 	STACK_MAX 10000
 	COMPILE_FLAGS
-		${MODULE_CFLAGS}
+		-Wno-sign-compare # TODO: fix all sign-compare
 		-Wno-unused-result
 		-Wno-float-equal
 		-Wno-missing-declarations

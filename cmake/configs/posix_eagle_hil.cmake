@@ -1,4 +1,3 @@
-include(posix/px4_impl_posix)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PX4_SOURCE_DIR}/cmake/cmake_hexagon")
 
@@ -18,10 +17,9 @@ else()
 	set(QC_SOC_TARGET "APQ8074")
 endif()
 
+add_definitions(-DORB_COMMUNICATOR)
+
 set(config_module_list
-	drivers/device
-	drivers/boards/sitl
-	drivers/led
 	drivers/linux_sbus
 
 	systemcmds/param
@@ -29,30 +27,12 @@ set(config_module_list
 
 	modules/mavlink
 
-	modules/systemlib/param
-	modules/systemlib
-	modules/uORB
 	modules/sensors
 	modules/dataman
-	modules/sdlog2
 	modules/logger
 	modules/simulator
 	modules/commander
 
-	lib/controllib
-	lib/mathlib
-	lib/mathlib/math/filter
-	lib/ecl
-	lib/geo
-	lib/geo_lookup
-	lib/conversion
-	lib/version
-	lib/DriverFramework/framework
-	lib/micro-CDR
-
-	platforms/common
-	platforms/posix/px4_layer
-	platforms/posix/work_queue
 	modules/muorb/krait
 	)
 

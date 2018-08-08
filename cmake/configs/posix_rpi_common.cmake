@@ -1,7 +1,6 @@
 # This file is shared between posix_rpi_native.cmake
 # and posix_rpi_cross.cmake.
 
-include(posix/px4_impl_posix)
 
 # This definition allows to differentiate if this just the usual POSIX build
 # or if it is for the RPi.
@@ -16,20 +15,20 @@ set(config_module_list
 	#
 	# Board support modules
 	#
-	drivers/device
-	drivers/airspeed
-	drivers/ets_airspeed
-	drivers/ms4525_airspeed
-	drivers/ms5525_airspeed
-	drivers/sdp3x_airspeed
+	#drivers/barometer
+	drivers/batt_smbus
+	drivers/differential_pressure
+	drivers/distance_sensor
+	#drivers/telemetry
 
 	modules/sensors
-	platforms/posix/drivers/df_mpu9250_wrapper
-	platforms/posix/drivers/df_lsm9ds1_wrapper
-	platforms/posix/drivers/df_ms5611_wrapper
+
 	platforms/posix/drivers/df_hmc5883_wrapper
-	platforms/posix/drivers/df_trone_wrapper
 	platforms/posix/drivers/df_isl29501_wrapper
+	platforms/posix/drivers/df_lsm9ds1_wrapper
+	platforms/posix/drivers/df_mpu9250_wrapper
+	platforms/posix/drivers/df_ms5611_wrapper
+	platforms/posix/drivers/df_trone_wrapper
 
 	#
 	# System commands
@@ -41,6 +40,7 @@ set(config_module_list
 	systemcmds/esc_calib
 	systemcmds/reboot
 	systemcmds/topic_listener
+	systemcmds/tune_control
 	systemcmds/perf
 
 	#
@@ -49,6 +49,7 @@ set(config_module_list
 	modules/attitude_estimator_q
 	modules/position_estimator_inav
 	modules/local_position_estimator
+	modules/landing_target_estimator
 	modules/ekf2
 
 	#
@@ -65,13 +66,8 @@ set(config_module_list
 	#
 	# Library modules
 	#
-	modules/sdlog2
 	modules/logger
 	modules/commander
-	modules/systemlib/param
-	modules/systemlib
-	modules/systemlib/mixer
-	modules/uORB
 	modules/dataman
 	modules/land_detector
 	modules/navigator
@@ -90,32 +86,6 @@ set(config_module_list
 	drivers/pwm_out_sim
 	drivers/rpi_rc_in
 
-	#
-	# Libraries
-	#
-	lib/controllib
-	lib/mathlib
-	lib/mathlib/math/filter
-	lib/geo
-	lib/ecl
-	lib/geo_lookup
-	lib/launchdetection
-	lib/led
-	lib/external_lgpl
-	lib/conversion
-	lib/terrain_estimation
-	lib/runway_takeoff
-	lib/tailsitter_recovery
-	lib/version
-	lib/DriverFramework/framework
-	lib/micro-CDR
-
-	#
-	# POSIX
-	#
-	platforms/common
-	platforms/posix/px4_layer
-	platforms/posix/work_queue
 )
 
 #

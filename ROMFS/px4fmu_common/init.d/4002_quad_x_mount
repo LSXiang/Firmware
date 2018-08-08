@@ -1,6 +1,6 @@
 #!nsh
 #
-# @name Generic Quadrotor X config with mount (e.g. gimbal)
+# @name Generic Quadrotor x with mount (e.g. gimbal)
 #
 # @type Quadrotor x
 # @class Copter
@@ -28,4 +28,3 @@ set PWM_OUT 1234
 set MIXER_AUX mount
 set PWM_AUX_OUT 123456
 set PWM_AUX_RATE 50
-

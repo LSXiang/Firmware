@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (c) 2012-2017 PX4 Development Team. All rights reserved.
+ *   Copyright (c) 2012-2018 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -53,11 +53,15 @@
 #include <arpa/inet.h>
 #include <drivers/device/device.h>
 #endif
-#include <systemlib/param/param.h>
-#include <systemlib/perf_counter.h>
+#include <parameters/param.h>
+#include <perf/perf_counter.h>
 #include <pthread.h>
 #include <systemlib/mavlink_log.h>
 #include <drivers/device/ringbuffer.h>
+
+#ifdef __PX4_POSIX
+#include <net/if.h>
+#endif
 
 #include <uORB/uORB.h>
 #include <uORB/topics/mission.h>
@@ -76,6 +80,8 @@ enum Protocol {
 	UDP,
 	TCP,
 };
+
+#define HASH_PARAM "_HASH_CHECK"
 
 class Mavlink
 {
@@ -103,13 +109,18 @@ public:
 	 */
 	void			display_status();
 
+	/**
+	 * Display the status of all enabled streams.
+	 */
+	void			display_status_streams();
+
 	static int		stream_command(int argc, char *argv[]);
 
 	static int		instance_count();
 
 	static Mavlink		*new_instance();
 
-	static Mavlink		*get_instance(unsigned instance);
+	static Mavlink		*get_instance(int instance);
 
 	static Mavlink 		*get_instance_for_device(const char *device_name);
 
@@ -130,15 +141,7 @@ public:
 
 	static int		destroy_all_instances();
 
-	static int		get_status_all_instances();
-
-	/**
-	 * Set all instances to verbose mode
-	 *
-	 * This is primarily intended for analysis and
-	 * not intended for normal operation
-	 */
-	static int		set_verbose_all_instances(bool enabled);
+	static int		get_status_all_instances(bool show_streams_status);
 
 	static bool		instance_exists(const char *device_name, Mavlink *self);
 
@@ -171,12 +174,19 @@ public:
 		MAVLINK_MODE_OSD,
 		MAVLINK_MODE_MAGIC,
 		MAVLINK_MODE_CONFIG,
-		MAVLINK_MODE_IRIDIUM
+		MAVLINK_MODE_IRIDIUM,
+		MAVLINK_MODE_MINIMAL
 	};
 
 	enum BROADCAST_MODE {
 		BROADCAST_MODE_OFF = 0,
 		BROADCAST_MODE_ON
+	};
+
+	enum FLOW_CONTROL_MODE {
+		FLOW_CONTROL_OFF = 0,
+		FLOW_CONTROL_AUTO,
+		FLOW_CONTROL_ON
 	};
 
 	static const char *mavlink_mode_str(enum MAVLINK_MODE mode)
@@ -203,12 +213,14 @@ public:
 		case MAVLINK_MODE_IRIDIUM:
 			return "Iridium";
 
+		case MAVLINK_MODE_MINIMAL:
+			return "Minimal";
+
 		default:
 			return "Unknown";
 		}
 	}
 
-	void			set_mode(enum MAVLINK_MODE);
 	enum MAVLINK_MODE	get_mode() { return _mode; }
 
 	bool			get_hil_enabled() { return _hil_enabled; }
@@ -217,7 +229,7 @@ public:
 
 	bool			get_forward_externalsp() { return _forward_externalsp; }
 
-	bool			get_flow_control_enabled() { return _flow_control_enabled; }
+	bool			get_flow_control_enabled() { return _flow_control_mode; }
 
 	bool			get_forwarding_on() { return _forwarding_on; }
 
@@ -272,13 +284,6 @@ public:
 	void 			set_protocol(Protocol p) { _protocol = p; }
 
 	/**
-	 * Set verbose mode
-	 */
-	void			set_verbose(bool v);
-
-	bool			get_verbose() const { return _verbose; }
-
-	/**
 	 * Get the manual input generation mode
 	 *
 	 * @return true if manual inputs should generate RC data
@@ -312,18 +317,23 @@ public:
 
 	void			handle_message(const mavlink_message_t *msg);
 
-	MavlinkOrbSubscription *add_orb_subscription(const orb_id_t topic, int instance = 0);
+	/**
+	 * Add a mavlink orb topic subscription while ensuring that only a single object exists
+	 * for a given topic id and instance.
+	 * @param topic orb topic id
+	 * @param instance topic instance
+	 * @param disable_sharing if true, force creating a new instance
+	 */
+	MavlinkOrbSubscription *add_orb_subscription(const orb_id_t topic, int instance = 0, bool disable_sharing = false);
 
 	int			get_instance_id();
 
-#ifndef __PX4_QURT
 	/**
 	 * Enable / disable hardware flow control.
 	 *
 	 * @param enabled	True if hardware flow control should be enabled
 	 */
-	int			enable_flow_control(bool enabled);
-#endif
+	int			enable_flow_control(enum FLOW_CONTROL_MODE enabled);
 
 	mavlink_channel_t	get_channel();
 
@@ -386,7 +396,7 @@ public:
 	bool			get_has_received_messages() { return _received_messages; }
 	void			set_wait_to_transmit(bool wait) { _wait_to_transmit = wait; }
 	bool			get_wait_to_transmit() { return _wait_to_transmit; }
-	bool			should_transmit() { return (_boot_complete && (!_wait_to_transmit || (_wait_to_transmit && _received_messages))); }
+	bool			should_transmit() { return (_transmitting_enabled && _boot_complete && (!_wait_to_transmit || (_wait_to_transmit && _received_messages))); }
 
 	bool			message_buffer_write(const void *ptr, int size);
 
@@ -394,7 +404,7 @@ public:
 	void			unlockMessageBufferMutex(void) { pthread_mutex_unlock(&_message_buffer_mutex); }
 
 	/**
-	 * Count a transmision error
+	 * Count a transmission error
 	 */
 	void			count_txerr();
 
@@ -430,7 +440,11 @@ public:
 
 	int 			get_socket_fd() { return _socket_fd; };
 #ifdef __PX4_POSIX
-	struct sockaddr_in 	*get_client_source_address() { return &_src_addr; }
+	const in_addr query_netmask_addr(const int socket_fd, const ifreq &ifreq);
+
+	const in_addr compute_broadcast_addr(const in_addr &host_addr, const in_addr &netmask_addr);
+
+	struct sockaddr_in 	&get_client_source_address() { return _src_addr; }
 
 	void			set_client_source_initialized() { _src_addr_initialized = true; }
 
@@ -446,8 +460,6 @@ public:
 	bool			is_usb_uart() { return _is_usb_uart; }
 
 	bool			accepting_commands() { return true; /* non-trivial side effects ((!_config_link_on) || (_mode == MAVLINK_MODE_CONFIG));*/ }
-
-	bool			verbose() { return _verbose; }
 
 	int			get_data_rate()		{ return _datarate; }
 	void			set_data_rate(int rate) { if (rate > 0) { _datarate = rate; } }
@@ -478,18 +490,36 @@ public:
 
 	bool ftp_enabled() const { return _ftp_on; }
 
+	struct ping_statistics_s {
+		uint64_t last_ping_time;
+		uint32_t last_ping_seq;
+		uint32_t dropped_packets;
+		float last_rtt;
+		float mean_rtt;
+		float max_rtt;
+		float min_rtt;
+	};
+
+	/**
+	 * Get the ping statistics of this MAVLink link
+	 */
+	struct ping_statistics_s &get_ping_statistics() { return _ping_stats; }
+
 protected:
 	Mavlink			*next;
 
 private:
 	int			_instance_id;
+	bool			_transmitting_enabled;
+	bool			_transmitting_enabled_commanded;
+	bool			_first_heartbeat_sent{false};
 
 	orb_advert_t		_mavlink_log_pub;
 	bool			_task_running;
 	static bool		_boot_complete;
-	static constexpr unsigned MAVLINK_MAX_INSTANCES = 4;
-	static constexpr unsigned MAVLINK_MIN_INTERVAL = 1500;
-	static constexpr unsigned MAVLINK_MAX_INTERVAL = 10000;
+	static constexpr int MAVLINK_MAX_INSTANCES = 4;
+	static constexpr int MAVLINK_MIN_INTERVAL = 1500;
+	static constexpr int MAVLINK_MAX_INTERVAL = 10000;
 	static constexpr float MAVLINK_MIN_MULTIPLIER = 0.0005f;
 	mavlink_message_t _mavlink_buffer;
 	mavlink_status_t _mavlink_status;
@@ -518,16 +548,14 @@ private:
 	int32_t			_radio_id;
 
 	ringbuffer::RingBuffer		_logbuffer;
-	unsigned int		_total_counter;
 
 	pthread_t		_receive_thread;
 
-	bool			_verbose;
 	bool			_forwarding_on;
 	bool			_ftp_on;
-#ifndef __PX4_QURT
+
 	int			_uart_fd;
-#endif
+
 	int			_baudrate;
 	int			_datarate;		///< data rate for normal streams (attitude, position, etc.)
 	int			_datarate_events;	///< data rate for params, waypoints, text messages
@@ -544,10 +572,10 @@ private:
 	bool			mavlink_link_termination_allowed;
 
 	char 			*_subscribe_to_stream;
-	float			_subscribe_to_stream_rate;
+	float			_subscribe_to_stream_rate;  ///< rate of stream to subscribe to (0=disable, -1=unlimited, -2=default)
 	bool 			_udp_initialised;
 
-	bool			_flow_control_enabled;
+	enum FLOW_CONTROL_MODE	_flow_control_mode;
 	uint64_t		_last_write_success_time;
 	uint64_t		_last_write_try_time;
 	uint64_t		_mavlink_start_time;
@@ -573,12 +601,17 @@ private:
 	uint8_t _network_buf[MAVLINK_MAX_PACKET_LEN];
 	unsigned _network_buf_len;
 #endif
+
+	const char *_interface_name;
+
 	int _socket_fd;
 	Protocol	_protocol;
 	unsigned short _network_port;
 	unsigned short _remote_port;
 
 	struct telemetry_status_s	_rstatus;			///< receive status
+
+	struct ping_statistics_s	_ping_stats;		///< ping statistics
 
 	struct mavlink_message_buffer {
 		int write_ptr;
@@ -593,7 +626,7 @@ private:
 	pthread_mutex_t		_send_mutex;
 
 	bool			_param_initialized;
-	uint32_t		_broadcast_mode;
+	int32_t			_broadcast_mode;
 
 	param_t			_param_system_id;
 	param_t			_param_component_id;
@@ -612,9 +645,7 @@ private:
 
 	void			mavlink_update_system();
 
-#ifndef __PX4_QURT
-	int			mavlink_open_uart(int baudrate, const char *uart_name);
-#endif
+	int			mavlink_open_uart(int baudrate, const char *uart_name, bool force_flow_control);
 
 	static int		interval_from_rate(float rate);
 
@@ -622,7 +653,21 @@ private:
 	static constexpr unsigned RADIO_BUFFER_LOW_PERCENTAGE = 35;
 	static constexpr unsigned RADIO_BUFFER_HALF_PERCENTAGE = 50;
 
+	/**
+	 * Configure a single stream.
+	 * @param stream_name
+	 * @param rate streaming rate in Hz, -1 = unlimited rate
+	 * @return 0 on success, <0 on error
+	 */
 	int configure_stream(const char *stream_name, const float rate = -1.0f);
+
+	/**
+	 * Configure default streams according to _mode for either all streams or only a single
+	 * stream.
+	 * @param configure_single_stream: if nullptr, configure all streams, else only a single stream
+	 * @return 0 on success, <0 on error
+	 */
+	int configure_streams_to_default(const char *configure_single_stream = nullptr);
 
 	/**
 	 * Adjust the stream rates based on the current rate

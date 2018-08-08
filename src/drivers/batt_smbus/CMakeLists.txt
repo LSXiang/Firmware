@@ -33,10 +33,11 @@
 px4_add_module(
 	MODULE drivers__batt_smbus
 	MAIN batt_smbus
+	STACK_MAIN 1100
 	COMPILE_FLAGS
 	SRCS
+		batt_smbus_main.cpp
 		batt_smbus.cpp
+		batt_smbus_i2c.cpp
 	DEPENDS
-		platforms__common
 	)
-# vim: set noet ft=cmake fenc=utf-8 ff=unix :

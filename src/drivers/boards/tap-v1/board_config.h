@@ -98,8 +98,6 @@
 #define PX4_I2C_BUS_SONAR      2
 #define PX4_I2C_BUS_EXPANSION  3
 
-#define PX4_I2C_OBDEV_HMC5883	0x1e
-
 #define PX4_I2C_BUS_ONBOARD_HZ      400000
 #define PX4_I2C_BUS_SONAR_HZ        400000
 #define PX4_I2C_BUS_EXPANSION_HZ    400000
@@ -204,8 +202,7 @@
  */
 #define GPIO_OTGFS_VBUS (GPIO_INPUT|GPIO_FLOAT|GPIO_PORTA|GPIO_PIN9)
 
-#define RC_SERIAL_PORT		"/dev/ttyS5"
-#define INVERT_RC_INPUT(_invert_true)		while(0)
+#define RC_SERIAL_PORT		"/dev/ttyS5" /* No HW invert support */
 
 /* High-resolution timer
  */

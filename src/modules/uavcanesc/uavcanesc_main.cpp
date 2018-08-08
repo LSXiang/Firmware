@@ -42,10 +42,8 @@
 #include <cstring>
 #include <fcntl.h>
 #include <systemlib/err.h>
-#include <systemlib/systemlib.h>
-#include <systemlib/param/param.h>
-#include <systemlib/mixer/mixer.h>
-#include <systemlib/board_serial.h>
+#include <parameters/param.h>
+#include <lib/mixer/mixer.h>
 #include <version/version.h>
 #include <arch/board/board.h>
 #include <arch/chip/chip.h>

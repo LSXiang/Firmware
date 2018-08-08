@@ -1,4 +1,3 @@
-include(posix/px4_impl_posix)
 
 set(CMAKE_TOOLCHAIN_FILE ${PX4_SOURCE_DIR}/cmake/toolchains/Toolchain-arm-linux-gnueabihf.cmake)
 
@@ -10,12 +9,9 @@ add_definitions(
 
 set(config_module_list
 
-  # examples/px4_simple_app
-
 	#
 	# Board support modules
 	#
-	drivers/device
 	drivers/linux_sbus
 	modules/sensors
 	platforms/posix/drivers/df_ms5607_wrapper
@@ -41,6 +37,7 @@ set(config_module_list
 	modules/attitude_estimator_q
 	modules/position_estimator_inav
 	modules/local_position_estimator
+	modules/landing_target_estimator
 	modules/ekf2
 
 	#
@@ -55,13 +52,8 @@ set(config_module_list
 	#
 	# Library modules
 	#
-	modules/sdlog2
 	modules/logger
 	modules/commander
-	modules/systemlib/param
-	modules/systemlib
-	modules/systemlib/mixer
-	modules/uORB
 	modules/dataman
 	modules/land_detector
 	modules/navigator
@@ -71,32 +63,6 @@ set(config_module_list
 	# PX4 drivers
 	#
 	drivers/gps
-
-	#
-	# Libraries
-	#
-	lib/controllib
-	lib/mathlib
-	lib/mathlib/math/filter
-	lib/geo
-	lib/ecl
-	lib/geo_lookup
-	lib/launchdetection
-	lib/external_lgpl
-	lib/conversion
-	lib/terrain_estimation
-	lib/runway_takeoff
-	lib/tailsitter_recovery
-	lib/version
-	lib/DriverFramework/framework
-	lib/micro-CDR
-
-	#
-	# POSIX
-	#
-	platforms/common
-	platforms/posix/px4_layer
-	platforms/posix/work_queue
 )
 
 set(config_df_driver_list

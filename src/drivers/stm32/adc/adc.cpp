@@ -62,7 +62,7 @@
 #include <stm32_gpio.h>
 
 #include <systemlib/err.h>
-#include <systemlib/perf_counter.h>
+#include <perf/perf_counter.h>
 
 #include <uORB/topics/system_power.h>
 #include <uORB/topics/adc_report.h>
@@ -98,6 +98,22 @@
 
 #ifdef STM32_ADC_CCR
 # define rCCR		REG(STM32_ADC_CCR_OFFSET)
+
+/* Assuming VDC 2.4 - 3.6 */
+
+#define ADC_MAX_FADC 36000000
+
+#  if STM32_PCLK2_FREQUENCY/2 <= ADC_MAX_FADC
+#    define ADC_CCR_ADCPRE_DIV     ADC_CCR_ADCPRE_DIV2
+#  elif STM32_PCLK2_FREQUENCY/4 <= ADC_MAX_FADC
+#    define ADC_CCR_ADCPRE_DIV     ADC_CCR_ADCPRE_DIV4
+#  elif STM32_PCLK2_FREQUENCY/6 <= ADC_MAX_FADC
+#   define ADC_CCR_ADCPRE_DIV     ADC_CCR_ADCPRE_DIV6
+#  elif STM32_PCLK2_FREQUENCY/8 <= ADC_MAX_FADC
+#   define ADC_CCR_ADCPRE_DIV     ADC_CCR_ADCPRE_DIV8
+#  else
+#    error "ADC PCLK2 too high - no divisor found "
+#  endif
 #endif
 
 class ADC : public device::CDev
@@ -156,8 +172,6 @@ ADC::ADC(uint32_t channels) :
 	_to_system_power(nullptr),
 	_to_adc_report(nullptr)
 {
-	_debug_enabled = true;
-
 	/* always enable the temperature sensor */
 	channels |= 1 << 16;
 
@@ -195,66 +209,88 @@ ADC::~ADC()
 	}
 }
 
+int board_adc_init()
+{
+	static bool once = false;
+
+	if (!once) {
+
+		once = true;
+
+		/* do calibration if supported */
+#ifdef ADC_CR2_CAL
+		rCR2 |= ADC_CR2_CAL;
+		usleep(100);
+
+		if (rCR2 & ADC_CR2_CAL) {
+			return -1;
+		}
+
+#endif
+
+		/* arbitrarily configure all channels for 55 cycle sample time */
+		rSMPR1 = 0b00000011011011011011011011011011;
+		rSMPR2 = 0b00011011011011011011011011011011;
+
+		/* XXX for F2/4, might want to select 12-bit mode? */
+		rCR1 = 0;
+
+		/* enable the temperature sensor / Vrefint channel if supported*/
+		rCR2 =
+#ifdef ADC_CR2_TSVREFE
+			/* enable the temperature sensor in CR2 */
+			ADC_CR2_TSVREFE |
+#endif
+			0;
+
+		/* Soc have CCR */
+#ifdef STM32_ADC_CCR
+#  ifdef ADC_CCR_TSVREFE
+		/* enable temperature sensor in CCR */
+		rCCR = ADC_CCR_TSVREFE | ADC_CCR_ADCPRE_DIV;
+#  else
+		rCCR = ADC_CCR_ADCPRE_DIV;
+#  endif
+#endif
+
+		/* configure for a single-channel sequence */
+		rSQR1 = 0;
+		rSQR2 = 0;
+		rSQR3 = 0;	/* will be updated with the channel each tick */
+
+		/* power-cycle the ADC and turn it on */
+		rCR2 &= ~ADC_CR2_ADON;
+		usleep(10);
+		rCR2 |= ADC_CR2_ADON;
+		usleep(10);
+		rCR2 |= ADC_CR2_ADON;
+		usleep(10);
+
+		/* kick off a sample and wait for it to complete */
+		hrt_abstime now = hrt_absolute_time();
+		rCR2 |= ADC_CR2_SWSTART;
+
+		while (!(rSR & ADC_SR_EOC)) {
+
+			/* don't wait for more than 500us, since that means something broke - should reset here if we see this */
+			if ((hrt_absolute_time() - now) > 500) {
+				return -1;
+			}
+		}
+	} // once
+
+	return OK;
+}
+
 int
 ADC::init()
 {
-	/* do calibration if supported */
-#ifdef ADC_CR2_CAL
-	rCR2 |= ADC_CR2_CAL;
-	usleep(100);
+	int rv = board_adc_init();
 
-	if (rCR2 & ADC_CR2_CAL) {
-		return -1;
+	if (rv < 0) {
+		DEVICE_LOG("sample timeout");
+		return rv;
 	}
-
-#endif
-
-	/* arbitrarily configure all channels for 55 cycle sample time */
-	rSMPR1 = 0b00000011011011011011011011011011;
-	rSMPR2 = 0b00011011011011011011011011011011;
-
-	/* XXX for F2/4, might want to select 12-bit mode? */
-	rCR1 = 0;
-
-	/* enable the temperature sensor / Vrefint channel if supported*/
-	rCR2 =
-#ifdef ADC_CR2_TSVREFE
-		/* enable the temperature sensor in CR2 */
-		ADC_CR2_TSVREFE |
-#endif
-		0;
-
-#ifdef ADC_CCR_TSVREFE
-	/* enable temperature sensor in CCR */
-	rCCR = ADC_CCR_TSVREFE;
-#endif
-
-	/* configure for a single-channel sequence */
-	rSQR1 = 0;
-	rSQR2 = 0;
-	rSQR3 = 0;	/* will be updated with the channel each tick */
-
-	/* power-cycle the ADC and turn it on */
-	rCR2 &= ~ADC_CR2_ADON;
-	usleep(10);
-	rCR2 |= ADC_CR2_ADON;
-	usleep(10);
-	rCR2 |= ADC_CR2_ADON;
-	usleep(10);
-
-	/* kick off a sample and wait for it to complete */
-	hrt_abstime now = hrt_absolute_time();
-	rCR2 |= ADC_CR2_SWSTART;
-
-	while (!(rSR & ADC_SR_EOC)) {
-
-		/* don't wait for more than 500us, since that means something broke - should reset here if we see this */
-		if ((hrt_absolute_time() - now) > 500) {
-			DEVICE_LOG("sample timeout");
-			return -1;
-		}
-	}
-
 
 	/* create the device node */
 	return CDev::init();
@@ -350,8 +386,8 @@ ADC::update_system_power(hrt_abstime now)
 	system_power_s system_power = {};
 	system_power.timestamp = now;
 
-	system_power.voltage5V_v = 0;
-	system_power.voltage3V3_v = 0;
+	system_power.voltage5v_v = 0;
+	system_power.voltage3v3_v = 0;
 	system_power.v3v3_valid = 0;
 
 	/* Assume HW provides only ADC_SCALED_V5_SENSE */
@@ -366,7 +402,7 @@ ADC::update_system_power(hrt_abstime now)
 
 		if (_samples[i].am_channel == ADC_SCALED_V5_SENSE) {
 			// it is 2:1 scaled
-			system_power.voltage5V_v = _samples[i].am_data * (ADC_V5_V_FULL_SCALE / 4096);
+			system_power.voltage5v_v = _samples[i].am_data * (ADC_V5_V_FULL_SCALE / 4096.0f);
 			cnt--;
 
 		} else
@@ -375,7 +411,7 @@ ADC::update_system_power(hrt_abstime now)
 		{
 			if (_samples[i].am_channel == ADC_SCALED_V3V3_SENSORS_SENSE) {
 				// it is 2:1 scaled
-				system_power.voltage3V3_v = _samples[i].am_data * (ADC_3V3_SCALE * (3.3f / 4096.0f));
+				system_power.voltage3v3_v = _samples[i].am_data * (ADC_3V3_SCALE * (3.3f / 4096.0f));
 				system_power.v3v3_valid = 1;
 				cnt--;
 			}
@@ -397,10 +433,10 @@ ADC::update_system_power(hrt_abstime now)
 	system_power.usb_connected = BOARD_ADC_USB_CONNECTED;
 	/* If provided used the Valid signal from HW*/
 #if defined(BOARD_ADC_USB_VALID)
-	system_power.usb_vaild = BOARD_ADC_USB_VALID;
+	system_power.usb_valid = BOARD_ADC_USB_VALID;
 #else
 	/* If not provided then use connected */
-	system_power.usb_vaild  = system_power.usb_connected;
+	system_power.usb_valid  = system_power.usb_connected;
 #endif
 
 	/* The valid signals (HW dependent) are associated with each brick */
@@ -415,8 +451,8 @@ ADC::update_system_power(hrt_abstime now)
 	system_power.servo_valid   = BOARD_ADC_SERVO_VALID;
 
 	// OC pins are active low
-	system_power.periph_5V_OC  = BOARD_ADC_PERIPH_5V_OC;
-	system_power.hipower_5V_OC = BOARD_ADC_HIPOWER_5V_OC;
+	system_power.periph_5v_oc  = BOARD_ADC_PERIPH_5V_OC;
+	system_power.hipower_5v_oc = BOARD_ADC_HIPOWER_5V_OC;
 
 	/* lazily publish */
 	if (_to_system_power != nullptr) {
@@ -429,12 +465,10 @@ ADC::update_system_power(hrt_abstime now)
 #endif // BOARD_ADC_USB_CONNECTED
 }
 
-uint16_t
-ADC::_sample(unsigned channel)
+uint16_t board_adc_sample(unsigned channel)
 {
-	perf_begin(_sample_perf);
-
 	/* clear any previous EOC */
+
 	if (rSR & ADC_SR_EOC) {
 		rSR &= ~ADC_SR_EOC;
 	}
@@ -450,13 +484,24 @@ ADC::_sample(unsigned channel)
 
 		/* don't wait for more than 50us, since that means something broke - should reset here if we see this */
 		if ((hrt_absolute_time() - now) > 50) {
-			DEVICE_LOG("sample timeout");
 			return 0xffff;
 		}
 	}
 
 	/* read the result and clear EOC */
 	uint16_t result = rDR;
+	return result;
+}
+
+uint16_t
+ADC::_sample(unsigned channel)
+{
+	perf_begin(_sample_perf);
+	uint16_t result = board_adc_sample(channel);
+
+	if (result == 0xffff) {
+		DEVICE_LOG("sample timeout");
+	}
 
 	perf_end(_sample_perf);
 	return result;

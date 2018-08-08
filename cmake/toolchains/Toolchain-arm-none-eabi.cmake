@@ -7,7 +7,6 @@
 # C_COMPILER
 # CMAKE_SYSTEM_NAME
 # CMAKE_SYSTEM_VERSION
-# GENROMFS
 # LINKER_FLAGS
 # CMAKE_EXE_LINKER_FLAGS
 # CMAKE_FIND_ROOT_PATH
@@ -20,7 +19,7 @@ include(CMakeForceCompiler)
 # this one is important
 set(CMAKE_SYSTEM_NAME Generic)
 
-#this one not so much
+# this one not so much
 set(CMAKE_SYSTEM_VERSION 1)
 
 # specify the cross compiler
@@ -54,29 +53,27 @@ foreach(tool gdb gdbtui)
 	endif()
 endforeach()
 
-# os tools
-foreach(tool echo patch grep rm mkdir nm genromfs cp touch make unzip)
-	string(TOUPPER ${tool} TOOL)
-	find_program(${TOOL} ${tool})
-	if(NOT ${TOOL})
-		message(FATAL_ERROR "could not find ${tool}")
-	endif()
-endforeach()
+set(cpu_flags)
+if (CMAKE_SYSTEM_PROCESSOR STREQUAL "cortex-m7")
+	set(cpu_flags "-mcpu=cortex-m7 -mthumb -mfpu=fpv5-d16 -mfloat-abi=hard")
+elseif (CMAKE_SYSTEM_PROCESSOR STREQUAL "cortex-m4")
+	set(cpu_flags "-mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard")
+elseif (CMAKE_SYSTEM_PROCESSOR STREQUAL "cortex-m3")
+	set(cpu_flags "-mcpu=cortex-m3 -mthumb")
+else ()
+	message(FATAL_ERROR "Processor not recognised in toolchain file")
+endif()
 
-# optional os tools
-foreach(tool ddd)
-	string(TOUPPER ${tool} TOOL)
-	find_program(${TOOL} ${tool})
-	if(NOT ${TOOL})
-		#message(STATUS "could not find ${tool}")
-	endif()
-endforeach()
+set(c_flags "-fno-common -ffunction-sections -fdata-sections")
+set(cxx_flags "-fno-common -ffunction-sections -fdata-sections")
 
-set(LINKER_FLAGS "-Wl,-gc-sections")
-set(CMAKE_EXE_LINKER_FLAGS ${LINKER_FLAGS})
+set(CMAKE_C_FLAGS "${c_flags} ${cpu_flags}" CACHE INTERNAL "" FORCE)
+set(CMAKE_CXX_FLAGS "${cxx_flags} ${cpu_flags}" CACHE INTERNAL "" FORCE)
+set(CMAKE_ASM_FLAGS "${cpu_flags} -D__ASSEMBLY__ " CACHE INTERNAL "" FORCE)
+set(CMAKE_EXE_LINKER_FLAGS "${cpu_flags} -nodefaultlibs -nostdlib -Wl,--warn-common,--gc-sections" CACHE INTERNAL "" FORCE)
 
 # where is the target environment 
-set(CMAKE_FIND_ROOT_PATH  get_file_component(${C_COMPILER} PATH))
+set(CMAKE_FIND_ROOT_PATH get_file_component(${C_COMPILER} PATH))
 
 # search for programs in the build host directories
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)

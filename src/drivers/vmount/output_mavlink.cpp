@@ -61,19 +61,10 @@ OutputMavlink::~OutputMavlink()
 
 int OutputMavlink::update(const ControlData *control_data)
 {
-	vehicle_command_s vehicle_command = {
-		.timestamp = 0,
-		.param5 = 0.0f,
-		.param6 = 0.0f,
-		.param1 = 0.0f,
-		.param2 = 0.0f,
-		.param3 = 0.0f,
-		.param4 = 0.0f,
-		.param7 = 0.0f,
-		.command = 0,
-		.target_system = (uint8_t)_config.mavlink_sys_id,
-		.target_component = (uint8_t)_config.mavlink_comp_id,
-	};
+	vehicle_command_s vehicle_command = {};
+	vehicle_command.timestamp = hrt_absolute_time();
+	vehicle_command.target_system = (uint8_t)_config.mavlink_sys_id;
+	vehicle_command.target_component = (uint8_t)_config.mavlink_comp_id;
 
 	if (control_data) {
 		//got new command
@@ -113,9 +104,9 @@ int OutputMavlink::update(const ControlData *control_data)
 
 	// vmount spec has roll, pitch on channels 0, 1, respectively; MAVLink spec has roll, pitch on channels 1, 0, respectively
 	// vmount uses radians, MAVLink uses degrees
-	vehicle_command.param1 = _angle_outputs[1] * M_RAD_TO_DEG_F;
-	vehicle_command.param2 = _angle_outputs[0] * M_RAD_TO_DEG_F;
-	vehicle_command.param3 = _angle_outputs[2] * M_RAD_TO_DEG_F;
+	vehicle_command.param1 = (_angle_outputs[1] + _config.pitch_offset) * M_RAD_TO_DEG_F;
+	vehicle_command.param2 = (_angle_outputs[0] + _config.roll_offset) * M_RAD_TO_DEG_F;
+	vehicle_command.param3 = (_angle_outputs[2] + _config.yaw_offset) * M_RAD_TO_DEG_F;
 
 	orb_publish(ORB_ID(vehicle_command), _vehicle_command_pub, &vehicle_command);
 

@@ -60,6 +60,8 @@
 #define GPIO_LED_BLUE	0
 #define GPIO_LED_SAFETY 0
 
+#define BOARD_HAS_CONTROL_STATUS_LEDS	1
+
 /* GPS */
 #define GPS_DEFAULT_UART_PORT	"/dev/ttyS0"
 
@@ -98,10 +100,10 @@
 #define PX4_SPI_BUS_EXT		1
 #define PX4_SPI_BUS_BARO	PX4_SPI_BUS_SENSORS
 
-/* Use these in place of the spi_dev_e enumeration to select a specific SPI device on SPI3 */
-#define PX4_SPIDEV_GYRO		1
-#define PX4_SPIDEV_ACCEL_MAG	2
-#define PX4_SPIDEV_BARO		3
+/* Use these in place of the uint32_t enumeration to select a specific SPI device on SPI3 */
+#define PX4_SPIDEV_GYRO       PX4_MK_SPI_SEL(PX4_SPI_BUS_SENSORS, 1)
+#define PX4_SPIDEV_ACCEL_MAG  PX4_MK_SPI_SEL(PX4_SPI_BUS_SENSORS, 2)
+#define PX4_SPIDEV_BARO       PX4_MK_SPI_SEL(PX4_SPI_BUS_SENSORS, 3)
 
 /* I2C busses */
 #define PX4_I2C_BUS_EXPANSION	1
@@ -184,8 +186,7 @@
 /* spektrum satellite receiver input */
 #define GPIO_SPEKTRUM_PWR_EN	(GPIO_OUTPUT|GPIO_PUSHPULL|GPIO_SPEED_2MHz|GPIO_OUTPUT_SET|GPIO_PORTE|GPIO_PIN15)
 #define SPEKTRUM_POWER(_on_true)	px4_arch_gpiowrite(GPIO_SPEKTRUM_PWR_EN, (_on_true))
-#define RC_SERIAL_PORT		"/dev/ttyS4"
-#define INVERT_RC_INPUT(_s)	while(0)
+#define RC_SERIAL_PORT		"/dev/ttyS4" /* No HW invert support */
 #define GPIO_PPM_IN		0
 #define GPIO_RC_OUT		0
 #define SPEKTRUM_RX_AS_GPIO_OUTPUT()	px4_arch_configgpio(GPIO_RC_OUT)

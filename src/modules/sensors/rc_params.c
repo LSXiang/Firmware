@@ -81,6 +81,8 @@ PARAM_DEFINE_FLOAT(RC1_MAX, 2000.0f);
  *
  * @min -1.0
  * @max 1.0
+ * @value -1.0 Reverse
+ * @value 1.0 Normal
  * @group Radio Calibration
  */
 PARAM_DEFINE_FLOAT(RC1_REV, 1.0f);
@@ -140,6 +142,8 @@ PARAM_DEFINE_FLOAT(RC2_MAX, 2000.0f);
  *
  * @min -1.0
  * @max 1.0
+ * @value -1.0 Reverse
+ * @value 1.0 Normal
  * @group Radio Calibration
  */
 PARAM_DEFINE_FLOAT(RC2_REV, 1.0f);
@@ -199,9 +203,12 @@ PARAM_DEFINE_FLOAT(RC3_MAX, 2000);
  *
  * @min -1.0
  * @max 1.0
+ * @value -1.0 Reverse
+ * @value 1.0 Normal
  * @group Radio Calibration
  */
 PARAM_DEFINE_FLOAT(RC3_REV, 1.0f);
+
 /**
  * RC channel 3 dead zone
  *
@@ -257,6 +264,8 @@ PARAM_DEFINE_FLOAT(RC4_MAX, 2000);
  *
  * @min -1.0
  * @max 1.0
+ * @value -1.0 Reverse
+ * @value 1.0 Normal
  * @group Radio Calibration
  */
 PARAM_DEFINE_FLOAT(RC4_REV, 1.0f);
@@ -316,6 +325,8 @@ PARAM_DEFINE_FLOAT(RC5_MAX, 2000);
  *
  * @min -1.0
  * @max 1.0
+ * @value -1.0 Reverse
+ * @value 1.0 Normal
  * @group Radio Calibration
  */
 PARAM_DEFINE_FLOAT(RC5_REV, 1.0f);
@@ -374,6 +385,8 @@ PARAM_DEFINE_FLOAT(RC6_MAX, 2000);
  *
  * @min -1.0
  * @max 1.0
+ * @value -1.0 Reverse
+ * @value 1.0 Normal
  * @group Radio Calibration
  */
 PARAM_DEFINE_FLOAT(RC6_REV, 1.0f);
@@ -432,6 +445,8 @@ PARAM_DEFINE_FLOAT(RC7_MAX, 2000);
  *
  * @min -1.0
  * @max 1.0
+ * @value -1.0 Reverse
+ * @value 1.0 Normal
  * @group Radio Calibration
  */
 PARAM_DEFINE_FLOAT(RC7_REV, 1.0f);
@@ -490,6 +505,8 @@ PARAM_DEFINE_FLOAT(RC8_MAX, 2000);
  *
  * @min -1.0
  * @max 1.0
+ * @value -1.0 Reverse
+ * @value 1.0 Normal
  * @group Radio Calibration
  */
 PARAM_DEFINE_FLOAT(RC8_REV, 1.0f);
@@ -548,6 +565,8 @@ PARAM_DEFINE_FLOAT(RC9_MAX, 2000);
  *
  * @min -1.0
  * @max 1.0
+ * @value -1.0 Reverse
+ * @value 1.0 Normal
  * @group Radio Calibration
  */
 PARAM_DEFINE_FLOAT(RC9_REV, 1.0f);
@@ -606,6 +625,8 @@ PARAM_DEFINE_FLOAT(RC10_MAX, 2000);
  *
  * @min -1.0
  * @max 1.0
+ * @value -1.0 Reverse
+ * @value 1.0 Normal
  * @group Radio Calibration
  */
 PARAM_DEFINE_FLOAT(RC10_REV, 1.0f);
@@ -664,6 +685,8 @@ PARAM_DEFINE_FLOAT(RC11_MAX, 2000);
  *
  * @min -1.0
  * @max 1.0
+ * @value -1.0 Reverse
+ * @value 1.0 Normal
  * @group Radio Calibration
  */
 PARAM_DEFINE_FLOAT(RC11_REV, 1.0f);
@@ -722,6 +745,8 @@ PARAM_DEFINE_FLOAT(RC12_MAX, 2000);
  *
  * @min -1.0
  * @max 1.0
+ * @value -1.0 Reverse
+ * @value 1.0 Normal
  * @group Radio Calibration
  */
 PARAM_DEFINE_FLOAT(RC12_REV, 1.0f);
@@ -780,6 +805,8 @@ PARAM_DEFINE_FLOAT(RC13_MAX, 2000);
  *
  * @min -1.0
  * @max 1.0
+ * @value -1.0 Reverse
+ * @value 1.0 Normal
  * @group Radio Calibration
  */
 PARAM_DEFINE_FLOAT(RC13_REV, 1.0f);
@@ -838,6 +865,8 @@ PARAM_DEFINE_FLOAT(RC14_MAX, 2000);
  *
  * @min -1.0
  * @max 1.0
+ * @value -1.0 Reverse
+ * @value 1.0 Normal
  * @group Radio Calibration
  */
 PARAM_DEFINE_FLOAT(RC14_REV, 1.0f);
@@ -896,6 +925,8 @@ PARAM_DEFINE_FLOAT(RC15_MAX, 2000);
  *
  * @min -1.0
  * @max 1.0
+ * @value -1.0 Reverse
+ * @value 1.0 Normal
  * @group Radio Calibration
  */
 PARAM_DEFINE_FLOAT(RC15_REV, 1.0f);
@@ -954,6 +985,8 @@ PARAM_DEFINE_FLOAT(RC16_MAX, 2000);
  *
  * @min -1.0
  * @max 1.0
+ * @value -1.0 Reverse
+ * @value 1.0 Normal
  * @group Radio Calibration
  */
 PARAM_DEFINE_FLOAT(RC16_REV, 1.0f);
@@ -1012,6 +1045,8 @@ PARAM_DEFINE_FLOAT(RC17_MAX, 2000);
  *
  * @min -1.0
  * @max 1.0
+ * @value -1.0 Reverse
+ * @value 1.0 Normal
  * @group Radio Calibration
  */
 PARAM_DEFINE_FLOAT(RC17_REV, 1.0f);
@@ -1070,6 +1105,8 @@ PARAM_DEFINE_FLOAT(RC18_MAX, 2000);
  *
  * @min -1.0
  * @max 1.0
+ * @value -1.0 Reverse
+ * @value 1.0 Normal
  * @group Radio Calibration
  */
 PARAM_DEFINE_FLOAT(RC18_REV, 1.0f);
@@ -1086,29 +1123,6 @@ PARAM_DEFINE_FLOAT(RC18_REV, 1.0f);
 PARAM_DEFINE_FLOAT(RC18_DZ, 0.0f);
 
 /**
- * Relay control of relay 1 mapped to the Spektrum receiver power supply
- *
- * @min 0
- * @max 1
- * @value 0 Disabled
- * @value 1 Relay controls DSM power
- * @group Radio Calibration
- */
-PARAM_DEFINE_INT32(RC_RL1_DSM_VCC, 0); /* Relay 1 controls DSM VCC */
-
-/**
- * DSM binding trigger.
- *
- * @value -1 Inactive
- * @value 0 Start DSM2 bind
- * @value 1 Start DSMX bind
- * @min -1
- * @max 1
- * @group Radio Calibration
- */
-PARAM_DEFINE_INT32(RC_DSM_BIND, -1);
-
-/**
  * RC channel count
  *
  * This parameter is used by Ground Station software to save the number
@@ -1119,23 +1133,7 @@ PARAM_DEFINE_INT32(RC_DSM_BIND, -1);
  * @max 18
  * @group Radio Calibration
  */
-
 PARAM_DEFINE_INT32(RC_CHAN_CNT, 0);
-
-/**
- * RC mode switch threshold automatic distribution
- *
- * This parameter is used by Ground Station software to specify whether
- * the threshold values for flight mode switches were automatically calculated.
- * 0 indicates that the threshold values were set by the user. Any other value
- * indicates that the threshold value where automatically set by the ground
- * station software. It is only meant for ground station use.
- *
- * @boolean
- * @group Radio Calibration
- */
-
-PARAM_DEFINE_INT32(RC_TH_USER, 1);
 
 /**
  * Roll control channel mapping.
@@ -1231,7 +1229,7 @@ PARAM_DEFINE_INT32(RC_MAP_PITCH, 0);
  * @value 18 Channel 18
  * @group Radio Calibration
  */
-PARAM_DEFINE_INT32(RC_MAP_FAILSAFE, 0);  //Default to throttle function
+PARAM_DEFINE_INT32(RC_MAP_FAILSAFE, 0);
 
 /**
  * Throttle control channel mapping.
@@ -1558,7 +1556,10 @@ PARAM_DEFINE_INT32(RC_MAP_OFFB_SW, 0);
 PARAM_DEFINE_INT32(RC_MAP_KILL_SW, 0);
 
 /**
- * Arm switch channel
+ * Arm switch channel.
+ *
+ * Use it to arm/disarm via switch instead of default throttle stick. If this is
+ * assigned, arming and disarming via stick is disabled.
  *
  * @min 0
  * @max 18
@@ -1990,8 +1991,6 @@ PARAM_DEFINE_INT32(RC_FAILS_THR, 0);
  * @min -1
  * @max 1
  * @group Radio Switches
- *
- *
  */
 PARAM_DEFINE_FLOAT(RC_ASSIST_TH, 0.25f);
 
@@ -2008,8 +2007,6 @@ PARAM_DEFINE_FLOAT(RC_ASSIST_TH, 0.25f);
  * @min -1
  * @max 1
  * @group Radio Switches
- *
- *
  */
 PARAM_DEFINE_FLOAT(RC_AUTO_TH, 0.75f);
 
@@ -2026,7 +2023,6 @@ PARAM_DEFINE_FLOAT(RC_AUTO_TH, 0.75f);
  * @min -1
  * @max 1
  * @group Radio Switches
- *
  */
 PARAM_DEFINE_FLOAT(RC_RATT_TH, 0.5f);
 
@@ -2043,7 +2039,6 @@ PARAM_DEFINE_FLOAT(RC_RATT_TH, 0.5f);
  * @min -1
  * @max 1
  * @group Radio Switches
- *
  */
 PARAM_DEFINE_FLOAT(RC_POSCTL_TH, 0.5f);
 
@@ -2060,8 +2055,6 @@ PARAM_DEFINE_FLOAT(RC_POSCTL_TH, 0.5f);
  * @min -1
  * @max 1
  * @group Radio Switches
- *
- *
  */
 PARAM_DEFINE_FLOAT(RC_RETURN_TH, 0.5f);
 
@@ -2078,8 +2071,6 @@ PARAM_DEFINE_FLOAT(RC_RETURN_TH, 0.5f);
  * @min -1
  * @max 1
  * @group Radio Switches
- *
- *
  */
 PARAM_DEFINE_FLOAT(RC_LOITER_TH, 0.5f);
 
@@ -2096,11 +2087,8 @@ PARAM_DEFINE_FLOAT(RC_LOITER_TH, 0.5f);
  * @min -1
  * @max 1
  * @group Radio Switches
- *
- *
  */
 PARAM_DEFINE_FLOAT(RC_ACRO_TH, 0.5f);
-
 
 /**
  * Threshold for selecting offboard mode
@@ -2115,11 +2103,8 @@ PARAM_DEFINE_FLOAT(RC_ACRO_TH, 0.5f);
  * @min -1
  * @max 1
  * @group Radio Switches
- *
- *
  */
 PARAM_DEFINE_FLOAT(RC_OFFB_TH, 0.5f);
-
 
 /**
  * Threshold for the kill switch
@@ -2134,8 +2119,6 @@ PARAM_DEFINE_FLOAT(RC_OFFB_TH, 0.5f);
  * @min -1
  * @max 1
  * @group Radio Switches
- *
- *
  */
 PARAM_DEFINE_FLOAT(RC_KILLSWITCH_TH, 0.25f);
 
@@ -2152,8 +2135,6 @@ PARAM_DEFINE_FLOAT(RC_KILLSWITCH_TH, 0.25f);
  * @min -1
  * @max 1
  * @group Radio Switches
- *
- *
  */
 PARAM_DEFINE_FLOAT(RC_ARMSWITCH_TH, 0.25f);
 
@@ -2170,8 +2151,6 @@ PARAM_DEFINE_FLOAT(RC_ARMSWITCH_TH, 0.25f);
  * @min -1
  * @max 1
  * @group Radio Switches
- *
- *
  */
 PARAM_DEFINE_FLOAT(RC_TRANS_TH, 0.25f);
 
@@ -2188,8 +2167,6 @@ PARAM_DEFINE_FLOAT(RC_TRANS_TH, 0.25f);
  * @min -1
  * @max 1
  * @group Radio Switches
- *
- *
  */
 PARAM_DEFINE_FLOAT(RC_GEAR_TH, 0.25f);
 
@@ -2206,8 +2183,6 @@ PARAM_DEFINE_FLOAT(RC_GEAR_TH, 0.25f);
  * @min -1
  * @max 1
  * @group Radio Switches
- *
- *
  */
 PARAM_DEFINE_FLOAT(RC_STAB_TH, 0.5f);
 
@@ -2224,71 +2199,11 @@ PARAM_DEFINE_FLOAT(RC_STAB_TH, 0.5f);
  * @min -1
  * @max 1
  * @group Radio Switches
- *
- *
  */
 PARAM_DEFINE_FLOAT(RC_MAN_TH, 0.5f);
 
 /**
- * PWM input channel that provides RSSI.
- *
- * 0: do not read RSSI from input channel
- * 1-18: read RSSI from specified input channel
- *
- * Specify the range for RSSI input with RC_RSSI_PWM_MIN and RC_RSSI_PWM_MAX parameters.
- *
- * @min 0
- * @max 18
- * @value 0 Unassigned
- * @value 1 Channel 1
- * @value 2 Channel 2
- * @value 3 Channel 3
- * @value 4 Channel 4
- * @value 5 Channel 5
- * @value 6 Channel 6
- * @value 7 Channel 7
- * @value 8 Channel 8
- * @value 9 Channel 9
- * @value 10 Channel 10
- * @value 11 Channel 11
- * @value 12 Channel 12
- * @value 13 Channel 13
- * @value 14 Channel 14
- * @value 15 Channel 15
- * @value 16 Channel 16
- * @value 17 Channel 17
- * @value 18 Channel 18
- * @group Radio Calibration
- *
- */
-PARAM_DEFINE_INT32(RC_RSSI_PWM_CHAN, 0);
-
-/**
- * Max input value for RSSI reading.
- *
- * Only used if RC_RSSI_PWM_CHAN > 0
- *
- * @min 0
- * @max 2000
- * @group Radio Calibration
- *
- */
-PARAM_DEFINE_INT32(RC_RSSI_PWM_MAX, 1000);
-
-/**
- * Min input value for RSSI reading.
- *
- * Only used if RC_RSSI_PWM_CHAN > 0
- *
- * @min 0
- * @max 2000
- * @group Radio Calibration
- *
- */
-PARAM_DEFINE_INT32(RC_RSSI_PWM_MIN, 2000);
-
-/**
- * Sample rate of the remote control values for the low pass filter on roll,pitch, yaw and throttle
+ * Sample rate of the remote control values for the low pass filter on roll, pitch, yaw and throttle
  *
  * Has an influence on the cutoff frequency precision.
  *
@@ -2299,11 +2214,12 @@ PARAM_DEFINE_INT32(RC_RSSI_PWM_MIN, 2000);
 PARAM_DEFINE_FLOAT(RC_FLT_SMP_RATE, 50.0f);
 
 /**
- * Cutoff frequency for the low pass filter on roll,pitch, yaw and throttle
+ * Cutoff frequency for the low pass filter on roll, pitch, yaw and throttle
  *
  * Does not get set unless below RC_FLT_SMP_RATE/2 because of filter instability characteristics.
+ * Set to 0 to disable the filter.
  *
- * @min 0.1
+ * @min 0
  * @unit Hz
  * @group Radio Calibration
  */

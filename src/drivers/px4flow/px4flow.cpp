@@ -62,9 +62,9 @@
 #include <nuttx/wqueue.h>
 #include <nuttx/clock.h>
 
-#include <systemlib/perf_counter.h>
+#include <perf/perf_counter.h>
 #include <systemlib/err.h>
-#include <systemlib/param/param.h>
+#include <parameters/param.h>
 
 #include <conversion/rotation.h>
 
@@ -74,7 +74,6 @@
 #include <drivers/device/ringbuffer.h>
 
 #include <uORB/uORB.h>
-#include <uORB/topics/subsystem_info.h>
 #include <uORB/topics/optical_flow.h>
 #include <uORB/topics/distance_sensor.h>
 
@@ -103,14 +102,12 @@
 
 #include "i2c_frame.h"
 
-struct i2c_frame f;
-struct i2c_integral_frame f_integral;
-
 class PX4FLOW: public device::I2C
 {
 public:
 	PX4FLOW(int bus, int address = I2C_FLOW_ADDRESS_DEFAULT, enum Rotation rotation = (enum Rotation)0,
-		int conversion_interval = PX4FLOW_CONVERSION_INTERVAL_DEFAULT);
+		int conversion_interval = PX4FLOW_CONVERSION_INTERVAL_DEFAULT,
+		uint8_t sonar_rotation = distance_sensor_s::ROTATION_DOWNWARD_FACING);
 	virtual ~PX4FLOW();
 
 	virtual int 		init();
@@ -128,6 +125,7 @@ protected:
 
 private:
 
+	uint8_t _sonar_rotation;
 	work_s				_work;
 	ringbuffer::RingBuffer		*_reports;
 	bool				_sensor_ok;
@@ -142,7 +140,14 @@ private:
 	perf_counter_t		_comms_errors;
 
 	unsigned                 _conversion_interval;
+
 	enum Rotation       _sensor_rotation;
+	float 				_sensor_min_range;
+	float 				_sensor_max_range;
+	float 				_sensor_max_flow_rate;
+
+	i2c_frame _frame;
+	i2c_integral_frame _frame_integral;
 
 	/**
 	 * Test whether the device supported by the driver is present at a
@@ -188,8 +193,9 @@ private:
  */
 extern "C" __EXPORT int px4flow_main(int argc, char *argv[]);
 
-PX4FLOW::PX4FLOW(int bus, int address, enum Rotation rotation, int conversion_interval) :
+PX4FLOW::PX4FLOW(int bus, int address, enum Rotation rotation, int conversion_interval, uint8_t sonar_rotation) :
 	I2C("PX4FLOW", PX4FLOW0_DEVICE_PATH, bus, address, PX4FLOW_I2C_MAX_BUS_SPEED), /* 100-400 KHz */
+	_sonar_rotation(sonar_rotation),
 	_reports(nullptr),
 	_sensor_ok(false),
 	_measure_ticks(0),
@@ -265,12 +271,39 @@ PX4FLOW::init()
 	/* get yaw rotation from sensor frame to body frame */
 	param_t rot = param_find("SENS_FLOW_ROT");
 
-	/* only set it if the parameter exists */
 	if (rot != PARAM_INVALID) {
 		int32_t val = 6; // the recommended installation for the flow sensor is with the Y sensor axis forward
 		param_get(rot, &val);
 
 		_sensor_rotation = (enum Rotation)val;
+	}
+
+	/* get operational limits of the sensor */
+	param_t hmin = param_find("SENS_FLOW_MINHGT");
+
+	if (hmin != PARAM_INVALID) {
+		float val = 0.7;
+		param_get(hmin, &val);
+
+		_sensor_min_range = val;
+	}
+
+	param_t hmax = param_find("SENS_FLOW_MAXHGT");
+
+	if (hmax != PARAM_INVALID) {
+		float val = 3.0;
+		param_get(hmax, &val);
+
+		_sensor_max_range = val;
+	}
+
+	param_t ratemax = param_find("SENS_FLOW_MAXR");
+
+	if (ratemax != PARAM_INVALID) {
+		float val = 2.5;
+		param_get(ratemax, &val);
+
+		_sensor_max_flow_rate = val;
 	}
 
 	return ret;
@@ -382,16 +415,6 @@ PX4FLOW::ioctl(struct file *filp, int cmd, unsigned long arg)
 			return OK;
 		}
 
-	case SENSORIOCGQUEUEDEPTH:
-		return _reports->size();
-
-	case SENSORIOCSROTATION:
-		_sensor_rotation = (enum Rotation)arg;
-		return OK;
-
-	case SENSORIOCGROTATION:
-		return _sensor_rotation;
-
 	case SENSORIOCRESET:
 		/* XXX implement this */
 		return -EINVAL;
@@ -487,7 +510,7 @@ PX4FLOW::collect()
 	int ret = -EIO;
 
 	/* read from the sensor */
-	uint8_t val[I2C_FRAME_SIZE + I2C_INTEGRAL_FRAME_SIZE] = { 0 };
+	uint8_t val[I2C_FRAME_SIZE + I2C_INTEGRAL_FRAME_SIZE] = { };
 
 	perf_begin(_sample_perf);
 
@@ -507,12 +530,12 @@ PX4FLOW::collect()
 	}
 
 	if (PX4FLOW_REG == 0) {
-		memcpy(&f, val, I2C_FRAME_SIZE);
-		memcpy(&f_integral, &(val[I2C_FRAME_SIZE]), I2C_INTEGRAL_FRAME_SIZE);
+		memcpy(&_frame, val, I2C_FRAME_SIZE);
+		memcpy(&_frame_integral, &(val[I2C_FRAME_SIZE]), I2C_INTEGRAL_FRAME_SIZE);
 	}
 
 	if (PX4FLOW_REG == 0x16) {
-		memcpy(&f_integral, val, I2C_INTEGRAL_FRAME_SIZE);
+		memcpy(&_frame_integral, val, I2C_INTEGRAL_FRAME_SIZE);
 	}
 
 
@@ -520,29 +543,35 @@ PX4FLOW::collect()
 
 	report.timestamp = hrt_absolute_time();
 
-	report.pixel_flow_x_integral = static_cast<float>(f_integral.pixel_flow_x_integral) / 10000.0f;//convert to radians
+	report.pixel_flow_x_integral = static_cast<float>(_frame_integral.pixel_flow_x_integral) / 10000.0f;//convert to radians
 
-	report.pixel_flow_y_integral = static_cast<float>(f_integral.pixel_flow_y_integral) / 10000.0f;//convert to radians
+	report.pixel_flow_y_integral = static_cast<float>(_frame_integral.pixel_flow_y_integral) / 10000.0f;//convert to radians
 
-	report.frame_count_since_last_readout = f_integral.frame_count_since_last_readout;
+	report.frame_count_since_last_readout = _frame_integral.frame_count_since_last_readout;
 
-	report.ground_distance_m = static_cast<float>(f_integral.ground_distance) / 1000.0f;//convert to meters
+	report.ground_distance_m = static_cast<float>(_frame_integral.ground_distance) / 1000.0f;//convert to meters
 
-	report.quality = f_integral.qual; //0:bad ; 255 max quality
+	report.quality = _frame_integral.qual; //0:bad ; 255 max quality
 
-	report.gyro_x_rate_integral = static_cast<float>(f_integral.gyro_x_rate_integral) / 10000.0f; //convert to radians
+	report.gyro_x_rate_integral = static_cast<float>(_frame_integral.gyro_x_rate_integral) / 10000.0f; //convert to radians
 
-	report.gyro_y_rate_integral = static_cast<float>(f_integral.gyro_y_rate_integral) / 10000.0f; //convert to radians
+	report.gyro_y_rate_integral = static_cast<float>(_frame_integral.gyro_y_rate_integral) / 10000.0f; //convert to radians
 
-	report.gyro_z_rate_integral = static_cast<float>(f_integral.gyro_z_rate_integral) / 10000.0f; //convert to radians
+	report.gyro_z_rate_integral = static_cast<float>(_frame_integral.gyro_z_rate_integral) / 10000.0f; //convert to radians
 
-	report.integration_timespan = f_integral.integration_timespan; //microseconds
+	report.integration_timespan = _frame_integral.integration_timespan; //microseconds
 
-	report.time_since_last_sonar_update = f_integral.sonar_timestamp;//microseconds
+	report.time_since_last_sonar_update = _frame_integral.sonar_timestamp;//microseconds
 
-	report.gyro_temperature = f_integral.gyro_temperature;//Temperature * 100 in centi-degrees Celsius
+	report.gyro_temperature = _frame_integral.gyro_temperature;//Temperature * 100 in centi-degrees Celsius
 
 	report.sensor_id = 0;
+
+	report.max_flow_rate = _sensor_max_flow_rate;
+
+	report.min_ground_distance = _sensor_min_range;
+
+	report.max_ground_distance = _sensor_max_range;
 
 	/* rotate measurements in yaw from sensor frame to body frame according to parameter SENS_FLOW_ROT */
 	float zeroval = 0.0f;
@@ -566,10 +595,11 @@ PX4FLOW::collect()
 	distance_report.max_distance = PX4FLOW_MAX_DISTANCE;
 	distance_report.current_distance = report.ground_distance_m;
 	distance_report.covariance = 0.0f;
+	distance_report.signal_quality = -1;
 	distance_report.type = distance_sensor_s::MAV_DISTANCE_SENSOR_ULTRASOUND;
 	/* TODO: the ID needs to be properly set */
 	distance_report.id = 0;
-	distance_report.orientation = 8;
+	distance_report.orientation = _sonar_rotation;
 
 	orb_publish(ORB_ID(distance_sensor), _distance_sensor_topic, &distance_report);
 
@@ -594,22 +624,6 @@ PX4FLOW::start()
 
 	/* schedule a cycle to start things */
 	work_queue(HPWORK, &_work, (worker_t)&PX4FLOW::cycle_trampoline, this, 1);
-
-	/* notify about state change */
-	struct subsystem_info_s info = {};
-	info.present = true;
-	info.enabled = true;
-	info.ok = true;
-	info.subsystem_type = subsystem_info_s::SUBSYSTEM_TYPE_OPTICALFLOW;
-
-	static orb_advert_t pub = nullptr;
-
-	if (pub != nullptr) {
-		orb_publish(ORB_ID(subsystem_info), pub, &info);
-
-	} else {
-		pub = orb_advertise(ORB_ID(subsystem_info), &info);
-	}
 }
 
 void
@@ -684,13 +698,13 @@ start(int argc, char *argv[])
 
 	/* entry check: */
 	if (start_in_progress) {
-		warnx("start already in progress");
+		PX4_WARN("start already in progress");
 		return 1;
 	}
 
 	if (g_dev != nullptr) {
 		start_in_progress = false;
-		warnx("already started");
+		PX4_WARN("already started");
 		return 1;
 	}
 
@@ -704,14 +718,15 @@ start(int argc, char *argv[])
 	int ch;
 	int myoptind = 1;
 	const char *myoptarg = nullptr;
+	uint8_t sonar_rotation = distance_sensor_s::ROTATION_DOWNWARD_FACING;
 
-	while ((ch = px4_getopt(argc, argv, "a:i:", &myoptind, &myoptarg)) != EOF) {
+	while ((ch = px4_getopt(argc, argv, "a:i:R:", &myoptind, &myoptarg)) != EOF) {
 		switch (ch) {
 		case 'a':
 			address = strtoul(myoptarg, nullptr, 16);
 
 			if (address < I2C_FLOW_ADDRESS_MIN || address > I2C_FLOW_ADDRESS_MAX) {
-				warnx("invalid i2c address '%s'", myoptarg);
+				PX4_WARN("invalid i2c address '%s'", myoptarg);
 				err_flag = true;
 
 			}
@@ -722,9 +737,15 @@ start(int argc, char *argv[])
 			conversion_interval = strtoul(myoptarg, nullptr, 10);
 
 			if (conversion_interval < PX4FLOW_CONVERSION_INTERVAL_MIN || conversion_interval > PX4FLOW_CONVERSION_INTERVAL_MAX) {
-				warnx("invalid conversion interval '%s'", myoptarg);
+				PX4_WARN("invalid conversion interval '%s'", myoptarg);
 				err_flag = true;
 			}
+
+			break;
+
+		case 'R':
+			sonar_rotation = (uint8_t)atoi(myoptarg);
+			PX4_INFO("Setting sonar orientation to %d", (int)sonar_rotation);
 
 			break;
 
@@ -741,7 +762,7 @@ start(int argc, char *argv[])
 
 	/* starting */
 	start_in_progress = true;
-	warnx("scanning I2C buses for device..");
+	PX4_INFO("scanning I2C buses for device..");
 
 	int retry_nr = 0;
 
@@ -754,6 +775,13 @@ start(int argc, char *argv[])
 #ifdef PX4_I2C_BUS_ONBOARD
 			PX4_I2C_BUS_ONBOARD,
 #endif
+#ifdef PX4_I2C_BUS_EXPANSION1
+			PX4_I2C_BUS_EXPANSION1,
+#endif
+#ifdef PX4_I2C_BUS_EXPANSION2
+			PX4_I2C_BUS_EXPANSION2,
+#endif
+
 			-1
 		};
 
@@ -761,8 +789,8 @@ start(int argc, char *argv[])
 
 		while (*cur_bus != -1) {
 			/* create the driver */
-			/* warnx("trying bus %d", *cur_bus); */
-			g_dev = new PX4FLOW(*cur_bus, address, (enum Rotation)0, conversion_interval);
+			/* PX4_WARN("trying bus %d", *cur_bus); */
+			g_dev = new PX4FLOW(*cur_bus, address, (enum Rotation)0, conversion_interval, sonar_rotation);
 
 			if (g_dev == nullptr) {
 				/* this is a fatal error */
@@ -809,7 +837,7 @@ start(int argc, char *argv[])
 
 		if (retry_nr < START_RETRY_COUNT) {
 			/* lets not be too verbose */
-			// warnx("PX4FLOW not found on I2C busses. Retrying in %d ms. Giving up in %d retries.", START_RETRY_TIMEOUT, START_RETRY_COUNT - retry_nr);
+			// PX4_WARN("PX4FLOW not found on I2C busses. Retrying in %d ms. Giving up in %d retries.", START_RETRY_TIMEOUT, START_RETRY_COUNT - retry_nr);
 			usleep(START_RETRY_TIMEOUT * 1000);
 			retry_nr++;
 
@@ -869,14 +897,10 @@ test()
 	sz = read(fd, &report, sizeof(report));
 
 	if (sz != sizeof(report)) {
-		warnx("immediate read failed");
+		PX4_WARN("immediate read failed");
 	}
 
-	warnx("single read");
-	warnx("pixel_flow_x_integral: %i", f_integral.pixel_flow_x_integral);
-	warnx("pixel_flow_y_integral: %i", f_integral.pixel_flow_y_integral);
-	warnx("framecount_integral: %u",
-	      f_integral.frame_count_since_last_readout);
+	print_message(report);
 
 	/* start the sensor polling at 10Hz */
 	if (OK != ioctl(fd, SENSORIOCSPOLLRATE, 10)) {
@@ -903,25 +927,7 @@ test()
 			err(1, "periodic read failed");
 		}
 
-		warnx("periodic read %u", i);
-
-		warnx("framecount_total: %u", f.frame_count);
-		warnx("framecount_integral: %u",
-		      f_integral.frame_count_since_last_readout);
-		warnx("pixel_flow_x_integral: %i", f_integral.pixel_flow_x_integral);
-		warnx("pixel_flow_y_integral: %i", f_integral.pixel_flow_y_integral);
-		warnx("gyro_x_rate_integral: %i", f_integral.gyro_x_rate_integral);
-		warnx("gyro_y_rate_integral: %i", f_integral.gyro_y_rate_integral);
-		warnx("gyro_z_rate_integral: %i", f_integral.gyro_z_rate_integral);
-		warnx("integration_timespan [us]: %u", f_integral.integration_timespan);
-		warnx("ground_distance: %0.2f m",
-		      (double) f_integral.ground_distance / 1000);
-		warnx("time since last sonar update [us]: %i",
-		      f_integral.sonar_timestamp);
-		warnx("quality integration average : %i", f_integral.qual);
-		warnx("quality : %i", f.qual);
-
-
+		print_message(report);
 	}
 
 	errx(0, "PASS");

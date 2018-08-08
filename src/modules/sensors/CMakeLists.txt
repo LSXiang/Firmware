@@ -37,7 +37,6 @@ px4_add_module(
 	PRIORITY "SCHED_PRIORITY_MAX-5"
 	STACK_MAIN 1300
 	COMPILE_FLAGS
-		-Wno-sign-compare # TODO: fix all sign-compare
 	SRCS
 		voted_sensors_update.cpp
 		rc_update.cpp
@@ -46,6 +45,11 @@ px4_add_module(
 		temperature_compensation.cpp
 
 	DEPENDS
-		platforms__common
+		airspeed
+		battery
+		conversion
+		drivers__device
+		git_ecl
+		ecl_validation
+		mathlib
 	)
-# vim: set noet ft=cmake fenc=utf-8 ff=unix :

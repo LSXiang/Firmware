@@ -74,6 +74,18 @@ PARAM_DEFINE_FLOAT(FW_L1_PERIOD, 20.0f);
 PARAM_DEFINE_FLOAT(FW_L1_DAMPING, 0.75f);
 
 /**
+ * L1 controller roll slew rate limit.
+ *
+ * The maxium change in roll angle setpoint per second.
+ *
+ * @unit deg/s
+ * @min 0
+ * @increment 1
+ * @group FW L1 Control
+ */
+PARAM_DEFINE_FLOAT(FW_L1_R_SLEW_MAX, 90.0f);
+
+/**
  * Cruise throttle
  *
  * This is the throttle setting required to achieve the desired cruise speed. Most airframes have a value of 0.5-0.7.
@@ -86,6 +98,24 @@ PARAM_DEFINE_FLOAT(FW_L1_DAMPING, 0.75f);
  * @group FW L1 Control
  */
 PARAM_DEFINE_FLOAT(FW_THR_CRUISE, 0.6f);
+
+/**
+ * Scale throttle by pressure change
+ *
+ * Automatically adjust throttle to account for decreased air density at higher altitudes.
+ * Start with a scale factor of 1.0 and adjust for different propulsion systems.
+ *
+ * When flying without airspeed sensor this will help to keep a constant performance over large altitude ranges.
+ *
+ * The default value of 0 will disable scaling.
+ *
+ * @min 0.0
+ * @max 10.0
+ * @decimal 1
+ * @increment 0.1
+ * @group FW L1 Control
+ */
+PARAM_DEFINE_FLOAT(FW_THR_ALT_SCL, 0.0f);
 
 /**
  * Throttle max slew rate
@@ -260,7 +290,7 @@ PARAM_DEFINE_FLOAT(FW_LND_HVIRT, 10.0f);
  * @increment 0.5
  * @group FW L1 Control
  */
-PARAM_DEFINE_FLOAT(FW_LND_FLALT, 8.0f);
+PARAM_DEFINE_FLOAT(FW_LND_FLALT, 3.0f);
 
 /**
  * Landing throttle limit altitude (relative landing altitude)
@@ -383,6 +413,20 @@ PARAM_DEFINE_FLOAT(FW_AIRSPD_MIN, 10.0f);
 PARAM_DEFINE_FLOAT(FW_AIRSPD_MAX, 20.0f);
 
 /**
+ * Cruise Airspeed
+ *
+ * The fixed wing controller tries to fly at this airspeed.
+ *
+ * @unit m/s
+ * @min 0.0
+ * @max 40
+ * @decimal 1
+ * @increment 0.5
+ * @group FW TECS
+ */
+PARAM_DEFINE_FLOAT(FW_AIRSPD_TRIM, 15.0f);
+
+/**
  * Maximum climb rate
  *
  * This is the best climb rate that the aircraft can achieve with
@@ -433,7 +477,7 @@ PARAM_DEFINE_FLOAT(FW_T_SINK_MIN, 2.0f);
  * the aircraft.
  *
  * @unit m/s
- * @min 2.0
+ * @min 1.0
  * @max 15.0
  * @decimal 1
  * @increment 0.5
@@ -493,7 +537,8 @@ PARAM_DEFINE_FLOAT(FW_T_THR_DAMP, 0.5f);
  * This is the integrator gain on the control loop.
  * Increasing this gain increases the speed at which speed
  * and height offsets are trimmed out, but reduces damping and
- * increases overshoot.
+ * increases overshoot. Set this value to zero to completely
+ * disable all integrator action.
  *
  * @min 0.0
  * @max 2.0

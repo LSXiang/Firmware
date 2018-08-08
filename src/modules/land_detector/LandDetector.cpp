@@ -47,6 +47,8 @@
 #include <drivers/drv_hrt.h>
 #include "uORB/topics/parameter_update.h"
 
+using namespace time_literals;
+
 namespace land_detector
 {
 
@@ -82,7 +84,7 @@ void LandDetector::_cycle()
 		// Advertise the first land detected uORB.
 		_landDetected.timestamp = hrt_absolute_time();
 		_landDetected.freefall = false;
-		_landDetected.landed = false;
+		_landDetected.landed = true;
 		_landDetected.ground_contact = false;
 		_landDetected.maybe_landed = false;
 
@@ -90,6 +92,7 @@ void LandDetector::_cycle()
 		_p_total_flight_time_low = param_find("LND_FLIGHT_T_LO");
 
 		// Initialize uORB topics.
+		_armingSub = orb_subscribe(ORB_ID(actuator_armed));
 		_initialize_topics();
 
 		_check_params(true);
@@ -98,6 +101,7 @@ void LandDetector::_cycle()
 	}
 
 	_check_params(false);
+	_orb_update(ORB_ID(actuator_armed), _armingSub, &_arming);
 	_update_topics();
 	_update_state();
 
@@ -105,30 +109,22 @@ void LandDetector::_cycle()
 	const bool freefallDetected = (_state == LandDetectionState::FREEFALL);
 	const bool maybe_landedDetected = (_state == LandDetectionState::MAYBE_LANDED);
 	const bool ground_contactDetected = (_state == LandDetectionState::GROUND_CONTACT);
-	const float alt_max = _get_max_altitude();
+	const float alt_max = _get_max_altitude() > 0.0f ? _get_max_altitude() : INFINITY;
 
-	// Only publish very first time or when the result has changed.
-	if ((_landDetectedPub == nullptr) ||
+	const hrt_abstime now = hrt_absolute_time();
+
+	// publish at 1 Hz, very first time, or when the result has changed
+	if ((hrt_elapsed_time(&_landDetected.timestamp) >= 1_s) ||
+	    (_landDetectedPub == nullptr) ||
 	    (_landDetected.landed != landDetected) ||
 	    (_landDetected.freefall != freefallDetected) ||
 	    (_landDetected.maybe_landed != maybe_landedDetected) ||
 	    (_landDetected.ground_contact != ground_contactDetected) ||
 	    (fabsf(_landDetected.alt_max - alt_max) > FLT_EPSILON)) {
 
-		hrt_abstime now = hrt_absolute_time();
-
 		if (!landDetected && _landDetected.landed) {
 			// We did take off
 			_takeoff_time = now;
-
-		} else if (_takeoff_time != 0 && landDetected && !_landDetected.landed) {
-			// We landed
-			_total_flight_time += now - _takeoff_time;
-			_takeoff_time = 0;
-			uint32_t flight_time = (_total_flight_time >> 32) & 0xffffffff;
-			param_set_no_notification(_p_total_flight_time_high, &flight_time);
-			flight_time = _total_flight_time & 0xffffffff;
-			param_set_no_notification(_p_total_flight_time_low, &flight_time);
 		}
 
 		_landDetected.timestamp = hrt_absolute_time();
@@ -143,13 +139,26 @@ void LandDetector::_cycle()
 				 &instance, ORB_PRIO_DEFAULT);
 	}
 
+	// set the flight time when disarming (not necessarily when landed, because all param changes should
+	// happen on the same event and it's better to set/save params while not in armed state)
+	if (_takeoff_time != 0 && !_arming.armed && _previous_arming_state) {
+		_total_flight_time += now - _takeoff_time;
+		_takeoff_time = 0;
+		uint32_t flight_time = (_total_flight_time >> 32) & 0xffffffff;
+		param_set_no_notification(_p_total_flight_time_high, &flight_time);
+		flight_time = _total_flight_time & 0xffffffff;
+		param_set_no_notification(_p_total_flight_time_low, &flight_time);
+	}
+
+	_previous_arming_state = _arming.armed;
+
 	perf_end(_cycle_perf);
 
 	if (!should_exit()) {
 
 		// Schedule next cycle.
 		work_queue(HPWORK, &_work, (worker_t)&LandDetector::_cycle_trampoline, this,
-			   USEC2TICK(1000000 / LAND_DETECTOR_UPDATE_RATE_HZ));
+			   USEC2TICK(1_s / LAND_DETECTOR_UPDATE_RATE_HZ));
 
 	} else {
 		exit_and_cleanup();
@@ -169,9 +178,9 @@ void LandDetector::_check_params(const bool force)
 	if (updated || force) {
 		_update_params();
 		uint32_t flight_time;
-		param_get(_p_total_flight_time_high, &flight_time);
+		param_get(_p_total_flight_time_high, (int32_t *)&flight_time);
 		_total_flight_time = ((uint64_t)flight_time) << 32;
-		param_get(_p_total_flight_time_low, &flight_time);
+		param_get(_p_total_flight_time_low, (int32_t *)&flight_time);
 		_total_flight_time |= flight_time;
 	}
 }

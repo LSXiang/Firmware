@@ -60,6 +60,8 @@
 #define PX4IO_SERIAL_VECTOR     STM32_IRQ_USART6
 #define PX4IO_SERIAL_TX_DMAMAP  DMAMAP_USART6_TX_2
 #define PX4IO_SERIAL_RX_DMAMAP  DMAMAP_USART6_RX_2
+#define PX4IO_SERIAL_RCC_REG	STM32_RCC_APB2ENR
+#define PX4IO_SERIAL_RCC_EN	RCC_APB2ENR_USART6EN
 #define PX4IO_SERIAL_CLOCK      STM32_PCLK2_FREQUENCY
 #define PX4IO_SERIAL_BITRATE    1500000			/* 1.5Mbps -> max rate for IO */
 
@@ -148,38 +150,31 @@
 #define PX4_SPI_BUS_SENSORS    1
 #define PX4_SPI_BUS_RAMTRON    2
 #define PX4_SPI_BUS_BARO       PX4_SPI_BUS_SENSORS
-#define PX4_SPI_EXT0           5
-#define PX4_SPI_EXT1           6
+#define PX4_SPI_BUS_EXT0       5
+#define PX4_SPI_BUS_EXT1       6
 
-/* Use these in place of the spi_dev_e enumeration to select a specific SPI device on SPI1 */
+/* Use these in place of the uint32_t enumeration to select a specific SPI device on SPI1 */
 
-#define PX4_SPIDEV_GYRO         1
-#define PX4_SPIDEV_ACCEL_MAG    2
-#define PX4_SPIDEV_BARO         3
-#define PX4_SPIDEV_MPU          4
-#define PX4_SPIDEV_HMC          5
-#define PX4_SPIDEV_ICM          6
-#define PX4_SPIDEV_LIS          7
-#define PX4_SPIDEV_BMI          8
-#define PX4_SPIDEV_BMA          9
-#define PX4_SPIDEV_EXT0         10
-#define PX4_SPIDEV_EXT1         11
-#define PX4_SPIDEV_EEPROM	    12
-#define PX4_SPIDEV_ICM_20608    13
-#define PX4_SPIDEV_ICM_20602	14
+#define PX4_SPIDEV_GYRO         PX4_MK_SPI_SEL(PX4_SPI_BUS_SENSORS, 1)
+#define PX4_SPIDEV_ACCEL_MAG    PX4_MK_SPI_SEL(PX4_SPI_BUS_SENSORS, 2)
+#define PX4_SPIDEV_BARO         PX4_MK_SPI_SEL(PX4_SPI_BUS_SENSORS, 3)
+#define PX4_SPIDEV_MPU          PX4_MK_SPI_SEL(PX4_SPI_BUS_SENSORS, 4)
+#define PX4_SPIDEV_HMC          PX4_MK_SPI_SEL(PX4_SPI_BUS_SENSORS, 5)
+#define PX4_SPIDEV_ICM          PX4_MK_SPI_SEL(PX4_SPI_BUS_SENSORS, 6)
+#define PX4_SPIDEV_LIS          PX4_MK_SPI_SEL(PX4_SPI_BUS_SENSORS, 7)
+#define PX4_SPIDEV_BMI          PX4_MK_SPI_SEL(PX4_SPI_BUS_SENSORS, 8)
+#define PX4_SPIDEV_BMA          PX4_MK_SPI_SEL(PX4_SPI_BUS_SENSORS, 9)
+#define PX4_SPIDEV_EEPROM       PX4_MK_SPI_SEL(PX4_SPI_BUS_SENSORS, 12)
+#define PX4_SPIDEV_ICM_20608    PX4_MK_SPI_SEL(PX4_SPI_BUS_SENSORS, 13)
+#define PX4_SPIDEV_ICM_20602    PX4_MK_SPI_SEL(PX4_SPI_BUS_SENSORS, 14)
+
+#define PX4_SPIDEV_EXT0         PX4_MK_SPI_SEL(PX4_SPI_BUS_EXT0, 1)
+#define PX4_SPIDEV_EXT1         PX4_MK_SPI_SEL(PX4_SPI_BUS_EXT1, 1)
 
 /* I2C busses */
 #define PX4_I2C_BUS_ONBOARD     1
 #define PX4_I2C_BUS_EXPANSION   2
 #define PX4_I2C_BUS_LED         PX4_I2C_BUS_ONBOARD
-
-/* Devices on the external bus.
- *
- * Note that these are unshifted addresses.
- */
-#define PX4_I2C_OBDEV_LED       0x55
-#define PX4_I2C_OBDEV_HMC5883   0x1e
-#define PX4_I2C_OBDEV_LIS3MDL   0x1e
 
 /*
  * ADC channels
@@ -209,6 +204,10 @@
 
 #define BOARD_BATTERY2_V_DIV (6.490196078f)
 #define BOARD_BATTERY2_A_PER_V (26.4f)
+
+/* Define LTC4417 UV set by resistors on the board that are different than FMUv2 3.7V */
+
+#define BOARD_VALID_UV (4.01f)
 
 /* User GPIOs
  *
@@ -293,9 +292,12 @@
 #define PWMIN_TIMER_CHANNEL 2
 #define GPIO_PWM_IN			GPIO_TIM4_CH2IN_2
 
+/* N.B. By the virtue of not being named GPIO_BTN_SAFETY, this pin is
+ * initialized but not used (compiled for) in the FMU module
+ */
 #define GPIO_BTN_SAFETY_FMU		(GPIO_INPUT|GPIO_FLOAT|GPIO_PORTC|GPIO_PIN4)
 #define GPIO_SBUS_INV			(GPIO_OUTPUT|GPIO_PUSHPULL|GPIO_SPEED_2MHz|GPIO_OUTPUT_SET|GPIO_PORTC|GPIO_PIN13)
-#define INVERT_RC_INPUT(_invert_true)  px4_arch_gpiowrite(GPIO_SBUS_INV, _invert_true)
+#define BOARD_INVERT_RC_INPUT(_invert_true, _na)  px4_arch_gpiowrite(GPIO_SBUS_INV, _invert_true)
 
 #define GPIO_8266_GPIO0			(GPIO_INPUT|GPIO_PULLUP|GPIO_PORTE|GPIO_PIN2)
 //TODO: fo not see on schematic #define GPIO_SPEKTRUM_PWR_EN		(GPIO_OUTPUT|GPIO_PUSHPULL|GPIO_SPEED_2MHz|GPIO_OUTPUT_CLEAR|GPIO_PORTE|GPIO_PIN4)
@@ -367,6 +369,9 @@
 #define BOARD_DMA_ALLOC_POOL_SIZE 5120
 
 #define BOARD_HAS_ON_RESET 1
+
+#define BOARD_HAS_STATIC_MANIFEST 1
+
 __BEGIN_DECLS
 
 /****************************************************************************************************

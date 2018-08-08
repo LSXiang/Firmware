@@ -39,6 +39,7 @@
 
 #define ut_declare_test_c(test_function, test_class)	\
 	extern "C" {										\
+		int test_function(int argc, char *argv[]);		\
 		int test_function(int argc, char *argv[])		\
 		{												\
 			test_class* test = new test_class();		\
@@ -104,6 +105,7 @@ protected:
 			_tests_passed++;			\
 		}						\
 		_cleanup();					\
+		printf("\n");				\
 	} while (0)
 
 /// @brief Used to assert a value within a unit test.
@@ -160,7 +162,7 @@ protected:
 /// since it will give you better error reporting of the actual values being compared.
 #define ut_compare_float(message, v1, v2, precision)						\
 	do {											\
-		int _p = pow(10.0f, precision);							\
+		int _p = powf(10.0f, precision);						\
 		int _v1 = (int)(v1 * _p + 0.5f);						\
 		int _v2 = (int)(v2 * _p + 0.5f);						\
 		if (_v1 != _v2) {								\
@@ -185,8 +187,8 @@ protected:
 		}										\
 	} while (0)
 
-	virtual void _init(void) { };		///< Run before each unit test. Override to provide custom behavior.
-	virtual void _cleanup(void) { };	///< Run after each unit test. Override to provide custom behavior.
+	virtual void _init(void) {}		///< Run before each unit test. Override to provide custom behavior.
+	virtual void _cleanup(void) {}		///< Run after each unit test. Override to provide custom behavior.
 
 	void _print_assert(const char *msg, const char *test, const char *file, int line)
 	{

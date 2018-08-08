@@ -1,8 +1,5 @@
-include(nuttx/px4_impl_nuttx)
 
-px4_nuttx_configure(HWCLASS m4 CONFIG nsh ROMFS y ROMFSROOT px4fmu_common)
-
-set(CMAKE_TOOLCHAIN_FILE ${PX4_SOURCE_DIR}/cmake/toolchains/Toolchain-arm-none-eabi.cmake)
+px4_nuttx_configure(HWCLASS m4 CONFIG nsh ROMFS y ROMFSROOT px4fmu_common IO px4io-v2)
 
 set(config_uavcan_num_ifaces 2)
 
@@ -10,35 +7,23 @@ set(config_module_list
 	#
 	# Board support modules
 	#
-	drivers/airspeed
+	drivers/distance_sensor
+	drivers/barometer
+	drivers/differential_pressure
+	drivers/magnetometer
+	drivers/telemetry
+
+	drivers/batt_smbus
 	drivers/blinkm
-	drivers/bma180
-	drivers/bmi160
-	drivers/bmp280
-	drivers/boards/px4fmu-v4pro
-	drivers/bst
+	drivers/imu/bma180
+	drivers/imu/bmi160
 	drivers/camera_trigger
-	drivers/device
-	drivers/ets_airspeed
-	drivers/frsky_telemetry
 	drivers/gps
-	drivers/hmc5883
-	drivers/hott
-	drivers/hott/hott_sensors
-	drivers/hott/hott_telemetry
-	drivers/iridiumsbd
-	drivers/l3gd20
-	drivers/led
-	drivers/lis3mdl
-	drivers/ll40ls
-	drivers/lsm303d
-	drivers/mb12xx
+	drivers/irlock
+	drivers/imu/l3gd20
 	drivers/mkblctrl
-	drivers/mpu6000
-	drivers/mpu9250
-	drivers/ms4525_airspeed
-	drivers/ms5525_airspeed
-	drivers/ms5611
+	drivers/imu/mpu6000
+	drivers/imu/mpu9250
 	drivers/oreoled
 	drivers/pwm_input
 	drivers/pwm_out_sim
@@ -46,16 +31,10 @@ set(config_module_list
 	drivers/px4fmu
 	drivers/px4io
 	drivers/rgbled
-	drivers/sdp3x_airspeed
-	drivers/sf0x
-	drivers/sf1xx
-	drivers/snapdragon_rc_pwm
-	drivers/srf02
 	drivers/stm32
 	drivers/stm32/adc
 	drivers/stm32/tone_alarm
 	drivers/tap_esc
-	drivers/trone
 	drivers/vmount
 	modules/sensors
 
@@ -79,18 +58,18 @@ set(config_module_list
 	systemcmds/sd_bench
 	systemcmds/top
 	systemcmds/topic_listener
+	systemcmds/tune_control
 	systemcmds/ver
 
 	#
 	# Testing
 	#
-	drivers/sf0x/sf0x_tests
+	drivers/distance_sensor/sf0x/sf0x_tests
 	drivers/test_ppm
 	#lib/rc/rc_tests
 	modules/commander/commander_tests
 	lib/controllib/controllib_test
 	modules/mavlink/mavlink_tests
-	modules/mc_pos_control/mc_pos_control_tests
 	modules/uORB/uORB_tests
 	systemcmds/tests
 
@@ -112,8 +91,10 @@ set(config_module_list
 	#
 	modules/attitude_estimator_q
 	modules/ekf2
+	modules/landing_target_estimator
 	modules/local_position_estimator
 	modules/position_estimator_inav
+	modules/wind_estimator
 
 	#
 	# Vehicle Control
@@ -130,51 +111,16 @@ set(config_module_list
 	# Logging
 	#
 	modules/logger
-	modules/sdlog2
 
 	#
 	# Library modules
 	#
 	modules/dataman
-	modules/systemlib/param
-	modules/systemlib
-	modules/systemlib/mixer
-	modules/uORB
-
-	# micro RTPS
-	modules/micrortps_bridge/micrortps_client
-
-	#
-	# Libraries
-	#
-	lib/controllib
-	lib/conversion
-	lib/DriverFramework/framework
-	lib/ecl
-	lib/external_lgpl
-	lib/geo
-	lib/geo_lookup
-	lib/launchdetection
-	lib/led
-	lib/mathlib
-	lib/mathlib/math/filter
-	lib/runway_takeoff
-	lib/tailsitter_recovery
-	lib/terrain_estimation
-	lib/version
-	lib/micro-CDR
-
-	#
-	# Platform
-	#
-	platforms/common
-	platforms/nuttx
-	platforms/nuttx/px4_layer
 
 	#
 	# OBC challenge
 	#
-	modules/bottle_drop
+	examples/bottle_drop
 
 	#
 	# Rover apps
@@ -195,10 +141,6 @@ set(config_module_list
 	#examples/px4_simple_app
 
 	# Tutorial code from
-	# https://px4.io/dev/daemon
-	#examples/px4_daemon_app
-
-	# Tutorial code from
 	# https://px4.io/dev/debug_values
 	#examples/px4_mavlink_debug
 
@@ -208,38 +150,4 @@ set(config_module_list
 
 	# Hardware test
 	#examples/hwtest
-
-	# EKF
-	#examples/ekf_att_pos_estimator
 )
-
-set(config_rtps_send_topics
-   sensor_combined
-   )
-
-set(config_rtps_receive_topics
-   sensor_baro
-   )
-
-set(config_extra_builtin_cmds
-	serdis
-	sercon
-	)
-
-set(config_io_board
-	px4io-v2
-	)
-
-add_custom_target(sercon)
-set_target_properties(sercon PROPERTIES
-	PRIORITY "SCHED_PRIORITY_DEFAULT"
-	MAIN "sercon"
-	STACK_MAIN "2048"
-	COMPILE_FLAGS "-Os")
-
-add_custom_target(serdis)
-set_target_properties(serdis PROPERTIES
-	PRIORITY "SCHED_PRIORITY_DEFAULT"
-	MAIN "serdis"
-	STACK_MAIN "2048"
-	COMPILE_FLAGS "-Os")

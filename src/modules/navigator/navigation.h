@@ -39,8 +39,7 @@
  * @author Lorenz Meier <lm@inf.ethz.ch>
  */
 
-#ifndef NAVIGATION_H_
-#define NAVIGATION_H_
+#pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -66,14 +65,17 @@ enum NAV_CMD {
 	NAV_CMD_TAKEOFF = 22,
 	NAV_CMD_LOITER_TO_ALT = 31,
 	NAV_CMD_DO_FOLLOW_REPOSITION = 33,
-	NAV_CMD_ROI = 80,
 	NAV_CMD_VTOL_TAKEOFF = 84,
 	NAV_CMD_VTOL_LAND = 85,
 	NAV_CMD_DELAY = 93,
 	NAV_CMD_DO_JUMP = 177,
 	NAV_CMD_DO_CHANGE_SPEED = 178,
+	NAV_CMD_DO_SET_HOME = 179,
 	NAV_CMD_DO_SET_SERVO = 183,
 	NAV_CMD_DO_LAND_START = 189,
+	NAV_CMD_DO_SET_ROI_LOCATION = 195,
+	NAV_CMD_DO_SET_ROI_WPNEXT_OFFSET = 196,
+	NAV_CMD_DO_SET_ROI_NONE = 197,
 	NAV_CMD_DO_SET_ROI = 201,
 	NAV_CMD_DO_DIGICAM_CONTROL = 203,
 	NAV_CMD_DO_MOUNT_CONFIGURE = 204,
@@ -87,12 +89,33 @@ enum NAV_CMD {
 	NAV_CMD_VIDEO_START_CAPTURE = 2500,
 	NAV_CMD_VIDEO_STOP_CAPTURE = 2501,
 	NAV_CMD_DO_VTOL_TRANSITION = 3000,
+	NAV_CMD_FENCE_RETURN_POINT = 5000,
+	NAV_CMD_FENCE_POLYGON_VERTEX_INCLUSION = 5001,
+	NAV_CMD_FENCE_POLYGON_VERTEX_EXCLUSION = 5002,
+	NAV_CMD_FENCE_CIRCLE_INCLUSION = 5003,
+	NAV_CMD_FENCE_CIRCLE_EXCLUSION = 5004,
 	NAV_CMD_INVALID = UINT16_MAX /* ensure that casting a large number results in a specific error */
 };
 
 enum ORIGIN {
 	ORIGIN_MAVLINK = 0,
 	ORIGIN_ONBOARD
+};
+
+/* compatible to mavlink MAV_FRAME */
+enum NAV_FRAME {
+	NAV_FRAME_GLOBAL = 0,
+	NAV_FRAME_LOCAL_NED = 1,
+	NAV_FRAME_MISSION = 2,
+	NAV_FRAME_GLOBAL_RELATIVE_ALT = 3,
+	NAV_FRAME_LOCAL_ENU = 4,
+	NAV_FRAME_GLOBAL_INT = 5,
+	NAV_FRAME_GLOBAL_RELATIVE_ALT_INT = 6,
+	NAV_FRAME_LOCAL_OFFSET_NED = 7,
+	NAV_FRAME_BODY_NED = 8,
+	NAV_FRAME_BODY_OFFSET_NED = 9,
+	NAV_FRAME_GLOBAL_TERRAIN_ALT = 10,
+	NAV_FRAME_GLOBAL_TERRAIN_ALT_INT = 11
 };
 
 /**
@@ -134,6 +157,7 @@ struct mission_item_s {
 	union {
 		uint16_t do_jump_current_count;		/**< count how many times the jump has been done	*/
 		uint16_t vertex_count;			/**< Polygon vertex count (geofence)	*/
+		uint16_t land_precision;		/**< Defines if landing should be precise: 0 = normal landing, 1 = opportunistic precision landing, 2 = required precision landing (with search)	*/
 	};
 	struct {
 		uint16_t frame : 4,					/**< mission frame */
@@ -142,7 +166,6 @@ struct mission_item_s {
 			 force_heading : 1,				/**< heading needs to be reached */
 			 altitude_is_relative : 1,		/**< true if altitude is relative from start point	*/
 			 autocontinue : 1,				/**< true if next waypoint should follow after this one */
-			 disable_mc_yaw : 1,				/**< weathervane mode */
 			 vtol_back_transition : 1;		/**< part of the vtol back transition sequence */
 	};
 };
@@ -191,4 +214,3 @@ struct mission_save_point_s {
  */
 
 
-#endif

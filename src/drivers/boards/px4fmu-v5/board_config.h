@@ -347,7 +347,7 @@
 /* HEATER
  * PWM in future
  */
-#define GPIO_HEATER        /* PA7  T14CH1 */ (GPIO_OUTPUT|GPIO_PUSHPULL|GPIO_SPEED_2MHz|GPIO_OUTPUT_CLEAR|GPIO_PORTA|GPIO_PIN7)
+#define GPIO_HEATER_OUTPUT   /* PA7  T14CH1 */ (GPIO_OUTPUT|GPIO_PUSHPULL|GPIO_SPEED_2MHz|GPIO_OUTPUT_CLEAR|GPIO_PORTA|GPIO_PIN7)
 
 /* PWM Capture
  *
@@ -527,8 +527,6 @@
 #define BOARD_HAS_SINGLE_WIRE_ON_TX        1 /* HW default is wired as Single Wire On TX pin */
 #define BOARD_HAS_RX_TX_SWAP               1 /* HW Can swap TX and RX */
 #define RC_SERIAL_PORT_IS_SWAPED           0 /* Board wired with RC's TX is on cpu RX */
-
-#define GPS_DEFAULT_UART_PORT "/dev/ttyS0" /* UART1 on FMUv5 */
 
 /* Input Capture Channels. */
 #define INPUT_CAP1_TIMER                  2
@@ -728,10 +726,16 @@
 		PX4_ADC_GPIO,                     \
 		GPIO_HW_REV_DRIVE,                \
 		GPIO_HW_VER_DRIVE,                \
+		GPIO_CAN1_TX,                     \
+		GPIO_CAN1_RX,                     \
+		GPIO_CAN2_TX,                     \
+		GPIO_CAN2_RX,                     \
+		GPIO_CAN3_TX,                     \
+		GPIO_CAN3_RX,                     \
 		GPIO_CAN1_SILENT_S0,              \
 		GPIO_CAN2_SILENT_S1,              \
 		GPIO_CAN3_SILENT_S2,              \
-		GPIO_HEATER,                      \
+		GPIO_HEATER_OUTPUT,               \
 		GPIO_nPOWER_IN_A,                 \
 		GPIO_nPOWER_IN_B,                 \
 		GPIO_nPOWER_IN_C,                 \

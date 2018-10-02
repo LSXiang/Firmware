@@ -43,6 +43,7 @@
  * @author Jacob Dahl <dahl.jakejacob@gmail.com>
  */
 
+#pragma once
 
 #include <px4_config.h>
 #include <px4_workqueue.h>
@@ -52,7 +53,7 @@
 #include <string.h>
 #include <ecl/geo/geo.h>
 
-#include <drivers/device/CDev.hpp>
+#include <lib/cdev/CDev.hpp>
 #include <drivers/device/Device.hpp>
 #include <drivers/device/i2c.h>
 #include <drivers/drv_device.h>
@@ -119,7 +120,7 @@ int serial_number();
 extern device::Device *BATT_SMBUS_I2C_interface(int bus);
 typedef device::Device *(*BATT_SMBUS_constructor)(int);
 
-class BATT_SMBUS : public device::CDev
+class BATT_SMBUS : public cdev::CDev
 {
 public:
 
@@ -264,9 +265,8 @@ public:
 	 */
 	int unseal();
 
-
 protected:
-	Device *_interface;
+	device::Device *_interface;
 
 private:
 

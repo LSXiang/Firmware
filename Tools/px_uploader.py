@@ -336,7 +336,12 @@ class uploader(object):
         self.port.flushInput()
         # Set a baudrate that can not work on a real serial port
         # in that it is 233% off.
-        self.port.baudrate = self.baudrate_bootloader * 2.33
+        try:
+            self.port.baudrate = self.baudrate_bootloader * 2.33
+        except NotImplementedError as e:
+            # This error can occur because pySerial on Windows does not support odd baudrates
+            print(str(e) + " -> could not check for FTDI device, assuming USB connection")
+            return
 
         self.__send(uploader.GET_SYNC +
                     uploader.EOC)
@@ -346,7 +351,7 @@ class uploader(object):
             # if it fails we are on a real Serial Port
             self.ackWindowedMode = True
 
-        self.port.baudrate =self.baudrate_bootloader
+        self.port.baudrate = self.baudrate_bootloader
 
     # send the GET_DEVICE command and wait for an info parameter
     def __getInfo(self, param):
@@ -398,7 +403,7 @@ class uploader(object):
 
     # send the CHIP_ERASE command and wait for the bootloader to become ready
     def __erase(self, label):
-        print("Windowed mode:%s" % self.ackWindowedMode)
+        print("Windowed mode: %s" % self.ackWindowedMode)
         print("\n", end='')
         self.__send(uploader.CHIP_ERASE +
                     uploader.EOC)

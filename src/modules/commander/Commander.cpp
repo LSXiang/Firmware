@@ -152,7 +152,6 @@ static systemlib::Hysteresis auto_disarm_hysteresis(false);
 static float min_stick_change = 0.25f;
 
 static struct vehicle_status_s status = {};
-static struct battery_status_s battery = {};
 static struct actuator_armed_s armed = {};
 static struct safety_s safety = {};
 static struct vehicle_control_mode_s control_mode = {};
@@ -203,8 +202,7 @@ extern "C" __EXPORT int commander_main(int argc, char *argv[]);
  */
 void usage(const char *reason);
 
-void control_status_leds(vehicle_status_s *status_local, const actuator_armed_s *actuator_armed, bool changed,
-			 battery_status_s *battery_local, const cpuload_s *cpuload_local);
+void control_status_leds(vehicle_status_s *status_local, const actuator_armed_s *actuator_armed, bool changed, const uint8_t battery_warning, const cpuload_s *cpuload_local);
 
 void get_circuit_breaker_params();
 
@@ -273,7 +271,7 @@ static bool send_vehicle_command(uint16_t cmd, float param1 = NAN, float param2 
 	vcmd.param5 = (double)NAN;
 	vcmd.param6 = (double)NAN;
 	vcmd.param7 = NAN;
-	vcmd.command = vehicle_command_s::VEHICLE_CMD_NAV_TAKEOFF;
+	vcmd.command = cmd;
 	vcmd.target_system = status.system_id;
 	vcmd.target_component = status.component_id;
 
@@ -376,7 +374,7 @@ int commander_main(int argc, char *argv[])
 		bool preflight_check_res = Commander::preflight_check(true);
 		PX4_INFO("Preflight check: %s", preflight_check_res ? "OK" : "FAILED");
 
-		bool prearm_check_res = prearm_check(&mavlink_log_pub, status_flags, battery, safety, arm_requirements, hrt_elapsed_time(&commander_boot_timestamp));
+		bool prearm_check_res = prearm_check(&mavlink_log_pub, status_flags, safety, arm_requirements);
 		PX4_INFO("Prearm check: %s", prearm_check_res ? "OK" : "FAILED");
 
 		return 0;
@@ -502,15 +500,15 @@ void usage(const char *reason)
 
 void print_status()
 {
-	warnx("type: %s", (status.is_rotary_wing) ? "symmetric motion" : "forward motion");
-	warnx("safety: USB enabled: %s, power state valid: %s", (status_flags.usb_connected) ? "[OK]" : "[NO]",
+	PX4_INFO("type: %s", (status.is_rotary_wing) ? "symmetric motion" : "forward motion");
+	PX4_INFO("safety: USB enabled: %s, power state valid: %s", (status_flags.usb_connected) ? "[OK]" : "[NO]",
 	      (status_flags.condition_power_input_valid) ? " [OK]" : "[NO]");
-	warnx("home: lat = %.7f, lon = %.7f, alt = %.2f, yaw: %.2f", _home.lat, _home.lon, (double)_home.alt, (double)_home.yaw);
-	warnx("home: x = %.7f, y = %.7f, z = %.2f ", (double)_home.x, (double)_home.y, (double)_home.z);
-	warnx("datalink: %s %s", (status.data_link_lost) ? "LOST" : "OK", (status.high_latency_data_link_active) ? "(high latency)" : " ");
-	warnx("main state: %d", internal_state.main_state);
-	warnx("nav state: %d", status.nav_state);
-	warnx("arming: %s", arming_state_names[status.arming_state]);
+	PX4_INFO("home: lat = %.7f, lon = %.7f, alt = %.2f, yaw: %.2f", _home.lat, _home.lon, (double)_home.alt, (double)_home.yaw);
+	PX4_INFO("home: x = %.7f, y = %.7f, z = %.2f ", (double)_home.x, (double)_home.y, (double)_home.z);
+	PX4_INFO("datalink: %s %s", (status.data_link_lost) ? "LOST" : "OK", (status.high_latency_data_link_active) ? "(high latency)" : " ");
+	PX4_INFO("main state: %d", internal_state.main_state);
+	PX4_INFO("nav state: %d", status.nav_state);
+	PX4_INFO("arming: %s", arming_state_names[status.arming_state]);
 }
 
 static orb_advert_t status_pub;
@@ -522,7 +520,6 @@ transition_result_t arm_disarm(bool arm, orb_advert_t *mavlink_log_pub_local, co
 	// Transition the armed state. By passing mavlink_log_pub to arming_state_transition it will
 	// output appropriate error messages if the state cannot transition.
 	arming_res = arming_state_transition(&status,
-					     battery,
 					     safety,
 					     arm ? vehicle_status_s::ARMING_STATE_ARMED : vehicle_status_s::ARMING_STATE_STANDBY,
 					     &armed,
@@ -543,8 +540,10 @@ transition_result_t arm_disarm(bool arm, orb_advert_t *mavlink_log_pub_local, co
 }
 
 Commander::Commander() :
-	ModuleParams(nullptr)
+	ModuleParams(nullptr),
+	_failure_detector(this)
 {
+	_battery_sub = orb_subscribe(ORB_ID(battery_status));
 }
 
 bool
@@ -593,10 +592,6 @@ Commander::handle_command(vehicle_status_s *status_local, const vehicle_command_
 			transition_result_t arming_ret = TRANSITION_NOT_CHANGED;
 
 			transition_result_t main_ret = TRANSITION_NOT_CHANGED;
-
-			/* set HIL state */
-			hil_state_t new_hil_state = (base_mode & VEHICLE_MODE_FLAG_HIL_ENABLED) ? vehicle_status_s::HIL_STATE_ON : vehicle_status_s::HIL_STATE_OFF;
-			transition_result_t hil_ret = hil_state_transition(new_hil_state, status_pub, status_local, &mavlink_log_pub);
 
 			// We ignore base_mode & VEHICLE_MODE_FLAG_SAFETY_ARMED because
 			// the command VEHICLE_CMD_COMPONENT_ARM_DISARM should be used
@@ -705,7 +700,7 @@ Commander::handle_command(vehicle_status_s *status_local, const vehicle_command_
 				}
 			}
 
-			if ((hil_ret != TRANSITION_DENIED) && (arming_ret != TRANSITION_DENIED) && (main_ret != TRANSITION_DENIED)) {
+			if ((arming_ret != TRANSITION_DENIED) && (main_ret != TRANSITION_DENIED)) {
 				cmd_result = vehicle_command_s::VEHICLE_CMD_RESULT_ACCEPTED;
 
 			} else {
@@ -1139,8 +1134,6 @@ Commander::run()
 	param_t _param_rc_arm_hyst = param_find("COM_RC_ARM_HYST");
 	param_t _param_min_stick_change = param_find("COM_RC_STICK_OV");
 	param_t _param_geofence_action = param_find("GF_ACTION");
-	param_t _param_disarm_land = param_find("COM_DISARM_LAND");
-	param_t _param_low_bat_act = param_find("COM_LOW_BAT_ACT");
 	param_t _param_offboard_loss_timeout = param_find("COM_OF_LOSS_T");
 	param_t _param_arm_without_gps = param_find("COM_ARM_WO_GPS");
 	param_t _param_arm_switch_is_button = param_find("COM_ARM_SWISBTN");
@@ -1263,11 +1256,6 @@ Commander::run()
 	int stick_off_counter = 0;
 	int stick_on_counter = 0;
 
-	bool low_battery_voltage_actions_done = false;
-	bool critical_battery_voltage_actions_done = false;
-	bool emergency_battery_voltage_actions_done = false;
-	bool dangerous_battery_level_requests_poweroff = false;
-
 	bool status_changed = true;
 	bool param_init_forced = true;
 
@@ -1302,10 +1290,6 @@ Commander::run()
 	/* Subscribe to parameters changed topic */
 	int param_changed_sub = orb_subscribe(ORB_ID(parameter_update));
 
-	/* Subscribe to battery topic */
-	int battery_sub = orb_subscribe(ORB_ID(battery_status));
-	memset(&battery, 0, sizeof(battery));
-
 	/* Subscribe to subsystem info topic */
 	int subsys_sub = orb_subscribe(ORB_ID(subsystem_info));
 	struct subsystem_info_s info;
@@ -1326,7 +1310,7 @@ Commander::run()
 	int cpuload_sub = orb_subscribe(ORB_ID(cpuload));
 	memset(&cpuload, 0, sizeof(cpuload));
 
-	control_status_leds(&status, &armed, true, &battery, &cpuload);
+	control_status_leds(&status, &armed, true, _battery_warning, &cpuload);
 
 	thread_running = true;
 
@@ -1393,9 +1377,6 @@ Commander::run()
 	float ef_current2throttle_thres = 0.0f;
 	float ef_time_thres = 1000.0f;
 	uint64_t timestamp_engine_healthy = 0; /**< absolute time when engine was healty */
-
-	int32_t disarm_when_landed = 0;
-	int32_t low_bat_action = 0;
 
 	/* check which state machines for changes, clear "changed" flag */
 	bool main_state_changed = false;
@@ -1493,18 +1474,8 @@ Commander::run()
 			param_get(_param_ef_current2throttle_thres, &ef_current2throttle_thres);
 			param_get(_param_ef_time_thres, &ef_time_thres);
 			param_get(_param_geofence_action, &geofence_action);
-			param_get(_param_disarm_land, &disarm_when_landed);
 			param_get(_param_flight_uuid, &flight_uuid);
 
-			// If we update parameters the first time
-			// make sure the hysteresis time gets set.
-			// After that it will be set in the main state
-			// machine based on the arming state.
-			if (param_init_forced) {
-				auto_disarm_hysteresis.set_hysteresis_time_from(false, disarm_when_landed * 1_s);
-			}
-
-			param_get(_param_low_bat_act, &low_bat_action);
 			param_get(_param_offboard_loss_timeout, &offboard_loss_timeout);
 			param_get(_param_offboard_loss_act, &offboard_loss_act);
 			param_get(_param_offboard_loss_rc_act, &offboard_loss_rc_act);
@@ -1632,7 +1603,7 @@ Commander::run()
 				if (armed.armed && (status.hil_state == vehicle_status_s::HIL_STATE_OFF)
 				    && safety.safety_switch_available && !safety.safety_off) {
 
-					if (TRANSITION_CHANGED == arming_state_transition(&status, battery, safety, vehicle_status_s::ARMING_STATE_STANDBY,
+					if (TRANSITION_CHANGED == arming_state_transition(&status, safety, vehicle_status_s::ARMING_STATE_STANDBY,
 							&armed, true /* fRunPreArmChecks */, &mavlink_log_pub,
 							&status_flags, arm_requirements, hrt_elapsed_time(&commander_boot_timestamp))
 					   ) {
@@ -1732,17 +1703,16 @@ Commander::run()
 			was_falling = land_detector.freefall;
 		}
 
-		/* Update hysteresis time. Use a time of factor 5 longer if we have not taken off yet. */
-		hrt_abstime timeout_time = disarm_when_landed * 1_s;
-
+		// Auto disarm when landed
 		if (!have_taken_off_since_arming) {
-			timeout_time *= 5;
+			// pilot has ten seconds time to take off
+			auto_disarm_hysteresis.set_hysteresis_time_from(false, 10_s);
+		} else {
+			auto_disarm_hysteresis.set_hysteresis_time_from(false, _disarm_when_landed_timeout.get() * 1_s);
 		}
 
-		auto_disarm_hysteresis.set_hysteresis_time_from(false, timeout_time);
-
 		// Check for auto-disarm
-		if (armed.armed && land_detector.landed && disarm_when_landed > 0) {
+		if (armed.armed && land_detector.landed && _disarm_when_landed_timeout.get() > FLT_EPSILON) {
 			auto_disarm_hysteresis.set_state_and_update(true);
 
 		} else {
@@ -1771,96 +1741,7 @@ Commander::run()
 			orb_copy(ORB_ID(cpuload), cpuload_sub, &cpuload);
 		}
 
-		/* update battery status */
-		orb_check(battery_sub, &updated);
-
-		if (updated) {
-			orb_copy(ORB_ID(battery_status), battery_sub, &battery);
-
-			/* only consider battery voltage if system has been running 6s (usb most likely detected) and battery voltage is valid */
-			if ((hrt_elapsed_time(&commander_boot_timestamp) > 6_s)
-			    && battery.voltage_filtered_v > 2.0f * FLT_EPSILON) {
-
-				/* if battery voltage is getting lower, warn using buzzer, etc. */
-				if (battery.warning == battery_status_s::BATTERY_WARNING_LOW &&
-				    !low_battery_voltage_actions_done) {
-
-					low_battery_voltage_actions_done = true;
-
-					if (armed.armed) {
-						mavlink_log_critical(&mavlink_log_pub, "LOW BATTERY, RETURN TO LAND ADVISED");
-
-					} else {
-						mavlink_log_critical(&mavlink_log_pub, "LOW BATTERY, TAKEOFF DISCOURAGED");
-					}
-
-					status_changed = true;
-
-				} else if (battery.warning == battery_status_s::BATTERY_WARNING_CRITICAL &&
-					   !critical_battery_voltage_actions_done) {
-
-					critical_battery_voltage_actions_done = true;
-
-					if (!armed.armed) {
-						mavlink_log_critical(&mavlink_log_pub, "CRITICAL BATTERY, SHUT SYSTEM DOWN");
-
-					} else {
-						if (low_bat_action == 1 || low_bat_action == 3) {
-							// let us send the critical message even if already in RTL
-							if (TRANSITION_DENIED != main_state_transition(status, commander_state_s::MAIN_STATE_AUTO_RTL, status_flags, &internal_state)) {
-								warning_action_on = true;
-								mavlink_log_emergency(&mavlink_log_pub, "CRITICAL BATTERY, RETURNING TO LAND");
-
-							} else {
-								mavlink_log_emergency(&mavlink_log_pub, "CRITICAL BATTERY, RTL FAILED");
-							}
-
-						} else if (low_bat_action == 2) {
-							if (TRANSITION_DENIED != main_state_transition(status, commander_state_s::MAIN_STATE_AUTO_LAND, status_flags, &internal_state)) {
-								warning_action_on = true;
-								mavlink_log_emergency(&mavlink_log_pub, "CRITICAL BATTERY, LANDING AT CURRENT POSITION");
-
-							} else {
-								mavlink_log_emergency(&mavlink_log_pub, "CRITICAL BATTERY, LANDING FAILED");
-							}
-
-						} else {
-							mavlink_log_emergency(&mavlink_log_pub, "CRITICAL BATTERY, RETURN TO LAUNCH ADVISED!");
-						}
-					}
-
-					status_changed = true;
-
-				} else if (battery.warning == battery_status_s::BATTERY_WARNING_EMERGENCY &&
-					   !emergency_battery_voltage_actions_done) {
-
-					emergency_battery_voltage_actions_done = true;
-
-					if (!armed.armed) {
-						// Request shutdown at the end of the cycle. This allows
-						// the vehicle state to be published after emergency landing
-						dangerous_battery_level_requests_poweroff = true;
-					} else {
-						if (low_bat_action == 2 || low_bat_action == 3) {
-							if (TRANSITION_CHANGED == main_state_transition(status, commander_state_s::MAIN_STATE_AUTO_LAND, status_flags, &internal_state)) {
-								warning_action_on = true;
-								mavlink_log_emergency(&mavlink_log_pub, "DANGEROUS BATTERY LEVEL, LANDING IMMEDIATELY");
-
-							} else {
-								mavlink_log_emergency(&mavlink_log_pub, "DANGEROUS BATTERY LEVEL, LANDING FAILED");
-							}
-
-						} else {
-							mavlink_log_emergency(&mavlink_log_pub, "DANGEROUS BATTERY LEVEL, LANDING ADVISED!");
-						}
-					}
-
-					status_changed = true;
-				}
-
-				/* End battery voltage check */
-			}
-		}
+		battery_status_check();
 
 		/* update subsystem info which arrives from outside of commander*/
 		do {
@@ -1875,7 +1756,7 @@ Commander::run()
 		/* If in INIT state, try to proceed to STANDBY state */
 		if (!status_flags.condition_calibration_enabled && status.arming_state == vehicle_status_s::ARMING_STATE_INIT) {
 
-			arming_ret = arming_state_transition(&status, battery, safety, vehicle_status_s::ARMING_STATE_STANDBY, &armed,
+			arming_ret = arming_state_transition(&status, safety, vehicle_status_s::ARMING_STATE_STANDBY, &armed,
 							     true /* fRunPreArmChecks */, &mavlink_log_pub, &status_flags,
 							     arm_requirements, hrt_elapsed_time(&commander_boot_timestamp));
 
@@ -2000,7 +1881,7 @@ Commander::run()
 
 		// revert geofence failsafe transition if sticks are moved and we were previously in a manual mode
 		// but only if not in a low battery handling action
-		if (rc_override != 0 && !critical_battery_voltage_actions_done && (warning_action_on &&
+		if (rc_override != 0 && (_battery_warning < battery_status_s::BATTERY_WARNING_CRITICAL) && (warning_action_on &&
 				(main_state_before_rtl == commander_state_s::MAIN_STATE_MANUAL ||
 				 main_state_before_rtl == commander_state_s::MAIN_STATE_ALTCTL ||
 				 main_state_before_rtl == commander_state_s::MAIN_STATE_POSCTL ||
@@ -2023,7 +1904,7 @@ Commander::run()
 
 		// abort landing or auto or loiter if sticks are moved significantly
 		// but only if not in a low battery handling action
-		if (rc_override != 0 && !critical_battery_voltage_actions_done &&
+		if (rc_override != 0 && (_battery_warning < battery_status_s::BATTERY_WARNING_CRITICAL) &&
 		    (internal_state.main_state == commander_state_s::MAIN_STATE_AUTO_LAND ||
 		     internal_state.main_state == commander_state_s::MAIN_STATE_AUTO_MISSION ||
 		     internal_state.main_state == commander_state_s::MAIN_STATE_AUTO_LOITER)) {
@@ -2109,7 +1990,7 @@ Commander::run()
 					print_reject_arm("NOT DISARMING: Not in manual mode or landed yet.");
 
 				} else if ((stick_off_counter == rc_arm_hyst && stick_on_counter < rc_arm_hyst) || arm_switch_to_disarm_transition) {
-					arming_ret = arming_state_transition(&status, battery, safety, vehicle_status_s::ARMING_STATE_STANDBY, &armed,
+					arming_ret = arming_state_transition(&status, safety, vehicle_status_s::ARMING_STATE_STANDBY, &armed,
 									     true /* fRunPreArmChecks */,
 									     &mavlink_log_pub, &status_flags, arm_requirements, hrt_elapsed_time(&commander_boot_timestamp));
 				}
@@ -2159,7 +2040,7 @@ Commander::run()
 						print_reject_arm("NOT ARMING: Geofence RTL requires valid home");
 
 					} else if (status.arming_state == vehicle_status_s::ARMING_STATE_STANDBY) {
-						arming_ret = arming_state_transition(&status, battery, safety, vehicle_status_s::ARMING_STATE_ARMED, &armed,
+						arming_ret = arming_state_transition(&status, safety, vehicle_status_s::ARMING_STATE_ARMED, &armed,
 										     !in_arming_grace_period /* fRunPreArmChecks */,
 										     &mavlink_log_pub, &status_flags, arm_requirements, hrt_elapsed_time(&commander_boot_timestamp));
 
@@ -2253,7 +2134,7 @@ Commander::run()
 				orb_copy(ORB_ID_VEHICLE_ATTITUDE_CONTROLS, actuator_controls_sub, &actuator_controls);
 
 				const float throttle = actuator_controls.control[actuator_controls_s::INDEX_THROTTLE];
-				const float current2throttle = battery.current_a / throttle;
+				const float current2throttle = _battery_current / throttle;
 
 				if (((throttle > ef_throttle_thres) && (current2throttle < ef_current2throttle_thres))
 				    || status.engine_failure) {
@@ -2381,6 +2262,32 @@ Commander::run()
 
 				if (counter % (1000000 / COMMANDER_MONITORING_INTERVAL) == 0) {
 					mavlink_log_critical(&mavlink_log_pub, "RC and GPS lost: flight termination");
+				}
+			}
+		}
+
+
+		/* Check for failure detector status */
+		if (armed.armed) {
+
+			if (_failure_detector.update()) {
+
+				const uint8_t failure_status = _failure_detector.get_status();
+
+				if (failure_status != status.failure_detector_status) {
+					status.failure_detector_status = failure_status;
+					status_changed = true;
+				}
+
+				if (failure_status != 0 && !status_flags.circuit_breaker_flight_termination_disabled) {
+
+					// TODO: set force_failsafe flag
+
+					if (!_failure_detector_termination_printed) {
+						mavlink_log_critical(&mavlink_log_pub, "Attitude failure detected: force failsafe");
+						_failure_detector_termination_printed = true;
+					}
+
 				}
 			}
 		}
@@ -2536,12 +2443,12 @@ Commander::run()
 
 		} else if (!status_flags.usb_connected &&
 			   (status.hil_state != vehicle_status_s::HIL_STATE_ON) &&
-			   (battery.warning == battery_status_s::BATTERY_WARNING_CRITICAL)) {
+			   (_battery_warning == battery_status_s::BATTERY_WARNING_CRITICAL)) {
 			/* play tune on battery critical */
 			set_tune(TONE_BATTERY_WARNING_FAST_TUNE);
 
 		} else if ((status.hil_state != vehicle_status_s::HIL_STATE_ON) &&
-			   (battery.warning == battery_status_s::BATTERY_WARNING_LOW)) {
+			   (_battery_warning == battery_status_s::BATTERY_WARNING_LOW)) {
 			/* play tune on battery warning */
 			set_tune(TONE_BATTERY_WARNING_SLOW_TUNE);
 
@@ -2568,6 +2475,7 @@ Commander::run()
 
 		if (!sensor_fail_tune_played && (!status_flags.condition_system_sensors_initialized
 						 && status_flags.condition_system_hotplug_timeout)) {
+
 			set_tune_override(TONE_GPS_WARNING_TUNE);
 			sensor_fail_tune_played = true;
 			status_changed = true;
@@ -2581,12 +2489,12 @@ Commander::run()
 			/* blinking LED message, don't touch LEDs */
 			if (blink_state == 2) {
 				/* blinking LED message completed, restore normal state */
-				control_status_leds(&status, &armed, true, &battery, &cpuload);
+				control_status_leds(&status, &armed, true, _battery_warning, &cpuload);
 			}
 
 		} else {
 			/* normal state */
-			control_status_leds(&status, &armed, status_changed, &battery, &cpuload);
+			control_status_leds(&status, &armed, status_changed, _battery_warning, &cpuload);
 		}
 
 		status_changed = false;
@@ -2597,21 +2505,6 @@ Commander::run()
 		}
 
 		arm_auth_update(now, params_updated || param_init_forced);
-
-		// Handle shutdown request from emergency battery action
-		if(!armed.armed && dangerous_battery_level_requests_poweroff){
-			mavlink_log_critical(&mavlink_log_pub, "DANGEROUSLY LOW BATTERY, SHUT SYSTEM DOWN");
-			usleep(200000);
-			int ret_val = px4_shutdown_request(false, false);
-
-			if (ret_val) {
-				mavlink_log_critical(&mavlink_log_pub, "SYSTEM DOES NOT SUPPORT SHUTDOWN");
-				dangerous_battery_level_requests_poweroff = false;
-
-			} else {
-				while (1) { usleep(1); }
-			}
-		}
 
 		usleep(COMMANDER_MONITORING_INTERVAL);
 	}
@@ -2636,7 +2529,6 @@ Commander::run()
 	px4_close(cmd_sub);
 	px4_close(subsys_sub);
 	px4_close(param_changed_sub);
-	px4_close(battery_sub);
 	px4_close(land_detector_sub);
 
 	thread_running = false;
@@ -2668,7 +2560,7 @@ Commander::check_valid(const hrt_abstime &timestamp, const hrt_abstime &timeout,
 
 void
 control_status_leds(vehicle_status_s *status_local, const actuator_armed_s *actuator_armed,
-		    bool changed, battery_status_s *battery_local, const cpuload_s *cpuload_local)
+		    bool changed, const uint8_t battery_warning, const cpuload_s *cpuload_local)
 {
 	static hrt_abstime overload_start = 0;
 
@@ -2724,10 +2616,10 @@ control_status_leds(vehicle_status_s *status_local, const actuator_armed_s *actu
 			if (status.failsafe) {
 				led_color = led_control_s::COLOR_PURPLE;
 
-			} else if (battery_local->warning == battery_status_s::BATTERY_WARNING_LOW) {
+			} else if (battery_warning == battery_status_s::BATTERY_WARNING_LOW) {
 				led_color = led_control_s::COLOR_AMBER;
 
-			} else if (battery_local->warning == battery_status_s::BATTERY_WARNING_CRITICAL) {
+			} else if (battery_warning == battery_status_s::BATTERY_WARNING_CRITICAL) {
 				led_color = led_control_s::COLOR_RED;
 
 			} else {
@@ -3275,7 +3167,6 @@ set_control_mode()
 	/* set vehicle_control_mode according to set_navigation_state */
 	control_mode.flag_armed = armed.armed;
 	control_mode.flag_external_manual_override_ok = (!status.is_rotary_wing && !status.is_vtol);
-	control_mode.flag_system_hil_enabled = status.hil_state == vehicle_status_s::HIL_STATE_ON;
 	control_mode.flag_control_offboard_enabled = false;
 
 	switch (status.nav_state) {
@@ -3640,7 +3531,7 @@ void *commander_low_prio_loop(void *arg)
 					int calib_ret = PX4_ERROR;
 
 					/* try to go to INIT/PREFLIGHT arming state */
-					if (TRANSITION_DENIED == arming_state_transition(&status, battery, safety, vehicle_status_s::ARMING_STATE_INIT, &armed,
+					if (TRANSITION_DENIED == arming_state_transition(&status, safety, vehicle_status_s::ARMING_STATE_INIT, &armed,
 							false /* fRunPreArmChecks */, &mavlink_log_pub, &status_flags,
 							arm_requirements, hrt_elapsed_time(&commander_boot_timestamp))) {
 
@@ -3728,7 +3619,7 @@ void *commander_low_prio_loop(void *arg)
 
 						Commander::preflight_check(false);
 
-						arming_state_transition(&status, battery, safety, vehicle_status_s::ARMING_STATE_STANDBY, &armed,
+						arming_state_transition(&status, safety, vehicle_status_s::ARMING_STATE_STANDBY, &armed,
 									false /* fRunPreArmChecks */,
 									&mavlink_log_pub, &status_flags, arm_requirements, hrt_elapsed_time(&commander_boot_timestamp));
 
@@ -4078,7 +3969,7 @@ void Commander::data_link_checks(int32_t highlatencydatalink_loss_timeout, int32
 			// to avoid transmitting unnecessary data over that link
 			status.high_latency_data_link_active = false;
 			*status_changed = true;
-			mavlink_log_critical(&mavlink_log_pub, "LOW LATENCY DATA LINKS REGAINED, DEACTIVATING HIGH LATENCY LINK");
+			mavlink_log_critical(&mavlink_log_pub, "LOW LAT LINKS REGAINED, DEACTIVATE HIGH LAT LINK");
 		}
 
 	} else {
@@ -4095,7 +3986,7 @@ void Commander::data_link_checks(int32_t highlatencydatalink_loss_timeout, int32
 			}
 
 			if (!status.data_link_lost) {
-				mavlink_log_critical(&mavlink_log_pub, "ALL LOW LATENCY DATA LINKS LOST, ACTIVATING HIGH LATENCY LINK");
+				mavlink_log_critical(&mavlink_log_pub, "ALL LOW LAT LINKS LOST, ACTIVATE HIGH LAT LINK");
 
 			} else {
 				mavlink_log_critical(&mavlink_log_pub, "ACTIVATING AVAILABLE HIGH LATENCY LINK");
@@ -4109,6 +4000,60 @@ void Commander::data_link_checks(int32_t highlatencydatalink_loss_timeout, int32
 			status.data_link_lost = true;
 			status.data_link_lost_counter++;
 			*status_changed = true;
+		}
+	}
+}
+
+void Commander::battery_status_check()
+{
+	bool updated = false;
+
+	/* update battery status */
+	orb_check(_battery_sub, &updated);
+
+	if (updated) {
+
+		battery_status_s battery = {};
+		if (orb_copy(ORB_ID(battery_status), _battery_sub, &battery) == PX4_OK) {
+
+			if ((hrt_elapsed_time(&battery.timestamp) < 5_s)
+				&& battery.connected
+				&& (_battery_warning == battery_status_s::BATTERY_WARNING_NONE)) {
+
+				status_flags.condition_battery_healthy = true;
+
+			} else {
+				status_flags.condition_battery_healthy = false;
+			}
+
+			// execute battery failsafe if the state has gotten worse
+			if (armed.armed) {
+				if (battery.warning > _battery_warning) {
+					battery_failsafe(&mavlink_log_pub, status, status_flags, &internal_state, battery.warning, (low_battery_action_t)_low_bat_action.get());
+				}
+			}
+
+			// Handle shutdown request from emergency battery action
+			if (!armed.armed && (battery.warning != _battery_warning)) {
+
+				if (battery.warning == battery_status_s::BATTERY_WARNING_EMERGENCY) {
+					mavlink_log_critical(&mavlink_log_pub, "DANGEROUSLY LOW BATTERY, SHUT SYSTEM DOWN");
+					usleep(200000);
+
+					int ret_val = px4_shutdown_request(false, false);
+
+					if (ret_val) {
+						mavlink_log_critical(&mavlink_log_pub, "SYSTEM DOES NOT SUPPORT SHUTDOWN");
+
+					} else {
+						while (1) { usleep(1); }
+					}
+				}
+			}
+
+			// save last value
+			_battery_warning = battery.warning;
+			_battery_current = battery.current_filtered_a;
 		}
 	}
 }

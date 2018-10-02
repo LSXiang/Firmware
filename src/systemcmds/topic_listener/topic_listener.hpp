@@ -43,6 +43,7 @@
 #include <px4_middleware.h>
 #include <px4_app.h>
 #include <px4_config.h>
+#include <px4_log.h>
 #include <uORB/uORB.h>
 #include <string.h>
 #include <stdint.h>
@@ -50,53 +51,21 @@
 #include <stdlib.h>
 #include <inttypes.h>
 
+typedef int(*listener_print_topic_cb)(const orb_id_t &orb_id, int subscription);
+
 template <typename T>
-void listener(const orb_id_t &id, unsigned num_msgs, unsigned topic_instance, unsigned topic_interval)
+int listener_print_topic(const orb_id_t &orb_id, int subscription)
 {
-	if (orb_exists(id, topic_instance) != 0) {
-		printf("never published\n");
-		return;
+	T container;
+
+	int ret = orb_copy(orb_id, subscription, &container);
+
+	if (ret == PX4_OK) {
+		print_message(container);
 	}
 
-	int sub = orb_subscribe_multi(id, topic_instance);
-	orb_set_interval(sub, topic_interval);
-
-	bool updated = false;
-	unsigned i = 0;
-	hrt_abstime start_time = hrt_absolute_time();
-
-	while (i < num_msgs) {
-		orb_check(sub, &updated);
-
-		if (i == 0) {
-			updated = true;
-
-		} else {
-			usleep(500);
-		}
-
-		if (updated) {
-			start_time = hrt_absolute_time();
-			i++;
-
-			printf("\nTOPIC: %s instance %d #%d\n", id->o_name, topic_instance, i);
-
-			T container;
-
-			if (orb_copy(id, sub, &container) == PX4_OK) {
-				print_message(container);
-
-			} else {
-				PX4_ERR("orb_copy failed");
-			}
-
-		} else {
-			if (hrt_elapsed_time(&start_time) > 2 * 1000 * 1000) {
-				printf("Waited for 2 seconds without a message. Giving up.\n");
-				break;
-			}
-		}
-	}
-
-	orb_unsubscribe(sub);
+	return ret;
 }
+
+void listener(listener_print_topic_cb cb, const orb_id_t &id, unsigned num_msgs, unsigned topic_instance,
+	      unsigned topic_interval);

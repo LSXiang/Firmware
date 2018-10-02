@@ -2,13 +2,39 @@ pipeline {
   agent none
   stages {
 
- stage('Analysis') {
+    stage('Analysis') {
 
       parallel {
+        stage('catkin') {
+          agent {
+            docker {
+              image 'px4io/px4-dev-ros:2018-09-24'
+              args '-e CCACHE_BASEDIR=$WORKSPACE -v ${CCACHE_DIR}:${CCACHE_DIR}:rw -e HOME=$WORKSPACE'
+            }
+          }
+
+          steps {
+            sh 'ls -l'
+            sh '''#!/bin/bash -l
+              echo $0;
+              mkdir -p catkin_ws/src;
+              cp -R . catkin_ws/src/Firmware
+              cd catkin_ws;
+              source /opt/ros/melodic/setup.bash;
+              catkin init;
+              source devel/setup.bash;
+              catkin build -j$(nproc) -l$(nproc);
+            '''
+            sh 'rm -rf catkin_ws'
+          }
+          options {
+            checkoutToSubdirectory('catkin_ws/src/Firmware')
+          }
+        }
 
         stage('Style Check') {
           agent {
-            docker { image 'px4io/px4-dev-base:2018-07-19' }
+            docker { image 'px4io/px4-dev-base:2018-09-11' }
           }
 
           steps {
@@ -19,7 +45,7 @@ pipeline {
         stage('bloaty px4fmu-v2') {
           agent {
             docker {
-              image 'px4io/px4-dev-nuttx:2018-07-19'
+              image 'px4io/px4-dev-nuttx:2018-09-11'
               args '-e CCACHE_BASEDIR=$WORKSPACE -v ${CCACHE_DIR}:${CCACHE_DIR}:rw'
             }
           }
@@ -43,7 +69,7 @@ pipeline {
         stage('bloaty px4fmu-v5') {
           agent {
             docker {
-              image 'px4io/px4-dev-nuttx:2018-07-19'
+              image 'px4io/px4-dev-nuttx:2018-09-11'
               args '-e CCACHE_BASEDIR=$WORKSPACE -v ${CCACHE_DIR}:${CCACHE_DIR}:rw'
             }
           }
@@ -67,7 +93,7 @@ pipeline {
         stage('clang analyzer') {
           agent {
             docker {
-              image 'px4io/px4-dev-clang:2018-07-19'
+              image 'px4io/px4-dev-clang:2018-09-11'
               args '-e CCACHE_BASEDIR=$WORKSPACE -v ${CCACHE_DIR}:${CCACHE_DIR}:rw'
             }
           }
@@ -115,7 +141,7 @@ pipeline {
         stage('cppcheck') {
           agent {
             docker {
-              image 'px4io/px4-dev-base:ubuntu17.10'
+              image 'px4io/px4-dev-base:2018-09-11'
               args '-e CCACHE_BASEDIR=$WORKSPACE -v ${CCACHE_DIR}:${CCACHE_DIR}:rw'
             }
           }
@@ -148,7 +174,7 @@ pipeline {
         stage('check stack') {
           agent {
             docker {
-              image 'px4io/px4-dev-nuttx:2018-07-19'
+              image 'px4io/px4-dev-nuttx:2018-09-11'
               args '-e CCACHE_BASEDIR=$WORKSPACE -v ${CCACHE_DIR}:${CCACHE_DIR}:rw'
             }
           }
@@ -160,114 +186,36 @@ pipeline {
           }
         }
 
-        stage('code coverage (mission test)') {
+        stage('ShellCheck') {
           agent {
             docker {
-              image 'px4io/px4-dev-ros:2018-07-19'
-              args '-e CCACHE_BASEDIR=$WORKSPACE -v ${CCACHE_DIR}:${CCACHE_DIR}:rw -e HOME=$WORKSPACE'
-            }
-          }
-          steps {
-            sh 'export'
-            sh 'make distclean; rm -rf .ros; rm -rf .gazebo'
-            sh 'ulimit -c unlimited; make tests_mission_coverage'
-            withCredentials([string(credentialsId: 'FIRMWARE_CODECOV_TOKEN', variable: 'CODECOV_TOKEN')]) {
-              sh 'curl -s https://codecov.io/bash | bash -s - -F mission'
-            }
-            sh 'make distclean'
-          }
-        }
-
-        stage('code coverage (unit tests)') {
-          agent {
-            docker {
-              image 'px4io/px4-dev-base:2018-07-19'
+              image 'px4io/px4-dev-nuttx:2018-09-11'
               args '-e CCACHE_BASEDIR=$WORKSPACE -v ${CCACHE_DIR}:${CCACHE_DIR}:rw'
             }
           }
           steps {
             sh 'export'
             sh 'make distclean'
-            sh 'ulimit -c unlimited; make tests_coverage || true' // always pass for now
-            withCredentials([string(credentialsId: 'FIRMWARE_CODECOV_TOKEN', variable: 'CODECOV_TOKEN')]) {
-              sh 'curl -s https://codecov.io/bash | bash -s - -F unittests'
-            }
+            sh 'make shellcheck_all'
             sh 'make distclean'
-          }
-          post {
-            failure {
-              sh('ls -a')
-              sh('find . -name core')
-              sh('gdb --batch --quiet -ex "thread apply all bt full" -ex "quit" build/posix_sitl_default/px4 core || true') // always pass for now
-            }
           }
         }
 
-        stage('code coverage (python)') {
+        stage('Module Config Validation') {
           agent {
             docker {
-              image 'px4io/px4-dev-base:2018-08-04'
+              image 'px4io/px4-dev-base:2018-09-11'
               args '-e CCACHE_BASEDIR=$WORKSPACE -v ${CCACHE_DIR}:${CCACHE_DIR}:rw'
             }
           }
           steps {
             sh 'export'
-            sh 'make distclean'
-            sh 'make python_coverage'
-            withCredentials([string(credentialsId: 'FIRMWARE_CODECOV_TOKEN', variable: 'CODECOV_TOKEN')]) {
-              sh 'curl -s https://codecov.io/bash | bash -s - -F python'
-            }
-            sh 'make distclean'
+            sh 'make validate_module_configs'
           }
         }
 
       } // parallel
     } // stage Analysis
-
-    stage('Test') {
-      parallel {
-
-        stage('unit tests') {
-          agent {
-            docker {
-              image 'px4io/px4-dev-base:2018-07-19'
-              args '-e CCACHE_BASEDIR=$WORKSPACE -v ${CCACHE_DIR}:${CCACHE_DIR}:rw'
-            }
-          }
-          steps {
-            sh 'export'
-            sh 'make distclean'
-            sh 'ccache -z'
-            sh 'make posix_sitl_default test_results_junit'
-            sh 'ccache -s'
-            junit 'build/posix_sitl_default/JUnitTestResults.xml'
-            sh 'make distclean'
-          }
-        }
-
-        stage('unit tests (address sanitizer)') {
-          agent {
-            docker {
-              image 'px4io/px4-dev-base:2018-07-19'
-              args '-e CCACHE_BASEDIR=$WORKSPACE -v ${CCACHE_DIR}:${CCACHE_DIR}:rw'
-            }
-          }
-          environment {
-              PX4_ASAN = 1
-              ASAN_OPTIONS = "color=always:check_initialization_order=1:detect_stack_use_after_return=1"
-          }
-          steps {
-            sh 'export'
-            sh 'make distclean'
-            sh 'ccache -z'
-            sh 'make tests || true' // always pass for now, TODO: PX4 sitl clean shutdown
-            sh 'ccache -s'
-            sh 'make distclean'
-          }
-        }
-
-      } // parallel
-    } // stage Test
 
     stage('Generate Metadata') {
 
@@ -275,7 +223,7 @@ pipeline {
 
         stage('airframe') {
           agent {
-            docker { image 'px4io/px4-dev-base:2018-07-19' }
+            docker { image 'px4io/px4-dev-base:2018-09-11' }
           }
           steps {
             sh 'make distclean'
@@ -290,7 +238,7 @@ pipeline {
 
         stage('parameter') {
           agent {
-            docker { image 'px4io/px4-dev-base:2018-07-19' }
+            docker { image 'px4io/px4-dev-base:2018-09-11' }
           }
           steps {
             sh 'make distclean'
@@ -305,7 +253,7 @@ pipeline {
 
         stage('module') {
           agent {
-            docker { image 'px4io/px4-dev-base:2018-07-19' }
+            docker { image 'px4io/px4-dev-base:2018-09-11' }
           }
           steps {
             sh 'make distclean'
@@ -321,7 +269,7 @@ pipeline {
         stage('uorb graphs') {
           agent {
             docker {
-              image 'px4io/px4-dev-nuttx:2018-07-19'
+              image 'px4io/px4-dev-nuttx:2018-09-11'
               args '-e CCACHE_BASEDIR=$WORKSPACE -v ${CCACHE_DIR}:${CCACHE_DIR}:rw'
             }
           }
@@ -346,20 +294,21 @@ pipeline {
 
         stage('Devguide') {
           agent {
-            docker { image 'px4io/px4-dev-base:2018-07-19' }
+            docker { image 'px4io/px4-dev-base:2018-09-11' }
           }
           steps {
+            sh('export')
             unstash 'metadata_airframes'
             unstash 'metadata_parameters'
             unstash 'metadata_module_documentation'
-            withCredentials([usernamePassword(credentialsId: 'px4buildbot_github', passwordVariable: 'GIT_PASS', usernameVariable: 'GIT_USER')]) {
+            withCredentials([usernamePassword(credentialsId: 'px4buildbot_github_personal_token', passwordVariable: 'GIT_PASS', usernameVariable: 'GIT_USER')]) {
               sh('git clone https://${GIT_USER}:${GIT_PASS}@github.com/PX4/Devguide.git')
+              sh('cp airframes.md Devguide/en/airframes/airframe_reference.md')
+              sh('cp parameters.md Devguide/en/advanced/parameter_reference.md')
+              sh('cp -R modules/*.md Devguide/en/middleware/')
+              sh('cd Devguide; git checkout -B pr-firmware_metadata_update; git status; git add .; git commit -a -m "Update PX4 Firmware metadata `date`" || true')
+              sh('cd Devguide; git push --force origin pr-firmware_metadata_update || true')
             }
-            sh('cp airframes.md Devguide/en/airframes/airframe_reference.md')
-            sh('cp parameters.md Devguide/en/advanced/parameter_reference.md')
-            sh('cp -R modules/*.md Devguide/en/middleware/')
-            sh('cd Devguide; git checkout -B pr-firmware_metadata_update; git status; git add .; git commit -a -m "Update PX4 Firmware metadata `date`" || true')
-            sh('cd Devguide; git push origin pr-firmware_metadata_update || true')
           }
           when {
             anyOf {
@@ -374,18 +323,19 @@ pipeline {
 
         stage('Userguide') {
           agent {
-            docker { image 'px4io/px4-dev-base:2018-07-19' }
+            docker { image 'px4io/px4-dev-base:2018-09-11' }
           }
           steps {
+            sh('export')
             unstash 'metadata_airframes'
             unstash 'metadata_parameters'
-            withCredentials([usernamePassword(credentialsId: 'px4buildbot_github', passwordVariable: 'GIT_PASS', usernameVariable: 'GIT_USER')]) {
+            withCredentials([usernamePassword(credentialsId: 'px4buildbot_github_personal_token', passwordVariable: 'GIT_PASS', usernameVariable: 'GIT_USER')]) {
               sh('git clone https://${GIT_USER}:${GIT_PASS}@github.com/PX4/px4_user_guide.git')
+              sh('cp airframes.md px4_user_guide/en/airframes/airframe_reference.md')
+              sh('cp parameters.md px4_user_guide/en/advanced_config/parameter_reference.md')
+              sh('cd px4_user_guide; git checkout -B pr-firmware_metadata_update; git status; git add .; git commit -a -m "Update PX4 Firmware metadata `date`" || true')
+              sh('cd px4_user_guide; git push --force origin pr-firmware_metadata_update || true')
             }
-            sh('cp airframes.md px4_user_guide/en/airframes/airframe_reference.md')
-            sh('cp parameters.md px4_user_guide/en/advanced_config/parameter_reference.md')
-            sh('cd px4_user_guide; git checkout -B pr-firmware_metadata_update; git status; git add .; git commit -a -m "Update PX4 Firmware metadata `date`" || true')
-            sh('cd px4_user_guide; git push origin pr-firmware_metadata_update || true')
           }
           when {
             anyOf {
@@ -400,18 +350,44 @@ pipeline {
 
         stage('QGroundControl') {
           agent {
-            docker { image 'px4io/px4-dev-base:2018-07-19' }
+            docker { image 'px4io/px4-dev-base:2018-09-11' }
           }
           steps {
+            sh('export')
             unstash 'metadata_airframes'
             unstash 'metadata_parameters'
-            withCredentials([usernamePassword(credentialsId: 'px4buildbot_github', passwordVariable: 'GIT_PASS', usernameVariable: 'GIT_USER')]) {
+            withCredentials([usernamePassword(credentialsId: 'px4buildbot_github_personal_token', passwordVariable: 'GIT_PASS', usernameVariable: 'GIT_USER')]) {
               sh('git clone https://${GIT_USER}:${GIT_PASS}@github.com/mavlink/qgroundcontrol.git')
+              sh('cp airframes.xml qgroundcontrol/src/AutoPilotPlugins/PX4/AirframeFactMetaData.xml')
+              sh('cp parameters.xml qgroundcontrol/src/FirmwarePlugin/PX4/PX4ParameterFactMetaData.xml')
+              sh('cd qgroundcontrol; git checkout -B pr-firmware_metadata_update; git status; git add .; git commit -a -m "Update PX4 Firmware metadata `date`" || true')
+              sh('cd qgroundcontrol; git push --force origin pr-firmware_metadata_update || true')
             }
-            sh('cp airframes.xml qgroundcontrol/src/AutoPilotPlugins/PX4/AirframeFactMetaData.xml')
-            sh('cp parameters.xml qgroundcontrol/src/FirmwarePlugin/PX4/PX4ParameterFactMetaData.xml')
-            sh('cd qgroundcontrol; git checkout -B pr-firmware_metadata_update; git status; git add .; git commit -a -m "Update PX4 Firmware metadata `date`" || true')
-            sh('cd qgroundcontrol; git push origin pr-firmware_metadata_update || true')
+          }
+          when {
+            anyOf {
+              branch 'master'
+              branch 'pr-jenkins' // for testing
+            }
+          }
+          options {
+            skipDefaultCheckout()
+          }
+        }
+
+        stage('S3') {
+          agent {
+            docker { image 'px4io/px4-dev-base:2018-09-11' }
+          }
+          steps {
+            sh('export')
+            unstash 'metadata_airframes'
+            unstash 'metadata_parameters'
+            sh('ls')
+            withAWS(credentials: 'px4_aws_s3_key', region: 'us-east-1') {
+              s3Upload(acl: 'PublicRead', bucket: 'px4-travis', file: 'airframes.xml', path: 'Firmware/master/')
+              s3Upload(acl: 'PublicRead', bucket: 'px4-travis', file: 'parameters.xml', path: 'Firmware/master/')
+            }
           }
           when {
             anyOf {
@@ -432,9 +408,9 @@ pipeline {
   environment {
     CCACHE_DIR = '/tmp/ccache'
     CI = true
-    GIT_AUTHOR_EMAIL = "bot@pixhawk.org"
+    GIT_AUTHOR_EMAIL = "bot@px4.io"
     GIT_AUTHOR_NAME = "PX4BuildBot"
-    GIT_COMMITTER_EMAIL = "bot@pixhawk.org"
+    GIT_COMMITTER_EMAIL = "bot@px4.io"
     GIT_COMMITTER_NAME = "PX4BuildBot"
   }
   options {

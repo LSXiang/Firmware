@@ -5,18 +5,17 @@
 # NOTE: Script variables are declared/initialized/unset in the rcS script.
 #
 
+set BOARD_FMUV3 0
+
+
 ###############################################################################
 #               Begin Setup for board specific configurations.                #
 ###############################################################################
 
-if ver hwcmp AEROFC_V1 OMNIBUS_F4SD
+if ! ver hwcmp AEROFC_V1 OMNIBUS_F4SD
 then
-	# Aero FC uses separate driver
-else
-	if ver hwcmp CRAZYFLIE
+	if ! ver hwcmp CRAZYFLIE
 	then
-		# Crazyflie uses separate driver
-	else
 		# Configure all I2C buses to 100 KHz as they
 		# are all external or slow
 		fmu i2c 1 100000
@@ -109,10 +108,30 @@ then
 
 fi
 
+if ver hwcmp MINDPX_V2
+then
+	# External I2C bus
+	hmc5883 -C -T -X start
+
+	# Internal I2C bus
+	hmc5883 -C -T -I -R 12 start
+
+	mpu6000 -s -R 8 start
+	mpu9250 -s -R 8 start
+	lsm303d -R 10 start
+	l3gd20 -R 14 start
+fi
+
 if ver hwcmp NXPHLITE_V3
 then
-	# Internal I2C (baro)
-	mpl3115a2 -I start
+	# External I2C bus
+	hmc5883 -C -X start
+
+	# External I2C bus
+	lis3mdl -X start
+
+	# Onboard I2C (baro) but an external bus on V3 RC15
+	mpl3115a2 -X start
 
 	# Internal SPI (accel + mag)
 	fxos8701cq start -a 8 -R 0
@@ -121,8 +140,21 @@ then
 	fxas21002c start -R 0
 fi
 
-# V2 build hwtypecmp is always false
-set BOARD_FMUV3 0
+if ver hwcmp OMNIBUS_F4SD
+then
+	if ! mpu6000 -R 12 -s start
+	then
+		# some boards such as the Hobbywing XRotor F4 G2 use the ICM-20602
+		mpu6000 -R 12 -T 20602 -s start
+	fi
+
+	# Possible external compasses
+	hmc5883 -X start
+
+	bmp280 start
+
+	adc start
+fi
 
 if ver hwcmp PX4FMU_V2
 then
@@ -186,7 +218,7 @@ then
 		# external LSM303D is rotated 270 degrees yaw
 		lsm303d -X -R 6 start
 
-		if [ $BOARD_FMUV3 == 20 ]
+		if [ $BOARD_FMUV3 = 20 ]
 		then
 			# v2.0 internal MPU6000 is rotated 180 deg roll, 270 deg yaw
 			mpu6000 -R 14 start
@@ -195,39 +227,29 @@ then
 			hmc5883 -C -T -S -R 8 start
 		fi
 
-		if [ $BOARD_FMUV3 == 21 ]
+		if [ $BOARD_FMUV3 = 21 ]
 		then
 			# v2.1 internal MPU9250 is rotated 180 deg roll, 270 deg yaw
 			mpu9250 -R 14 start
 		fi
 
 	else
-		# $BOARD_FMUV3 == 0 -> FMUv2
+		# $BOARD_FMUV3 = 0 -> FMUv2
 
 		mpu6000 start
 
 		# As we will use the external mag and the ICM-20608-G
 		# V2 build hwtypecmp is always false
 		# V3 build hwtypecmp supports V2|V2M|V30
-		if ver hwtypecmp V2M
+		if ! ver hwtypecmp V2M
 		then
-			# On the PixhawkMini the mpu9250 has been disabled due to HW errata
-		else
 			mpu9250 start
+		# else: On the PixhawkMini the mpu9250 has been disabled due to HW errata
 		fi
 
 		l3gd20 start
 		lsm303d start
 	fi
-fi
-
-if ver hwcmp PX4_SAME70XPLAINED_V1
-then
-	# External I2C bus
-	hmc5883 -C -T -X start
-
-	# Internal SPI bus mpu9250 is rotated 90 deg yaw
-	mpu9250 -R 2 start
 fi
 
 if ver hwcmp PX4FMU_V4
@@ -240,14 +262,12 @@ then
 	# expansion i2c used for BMM150 rotated by 90deg
 	bmm150 -R 2 start
 
-	if hmc5883 -C -T -S -R 2 start
+	# hmc5883 internal SPI bus is rotated 90 deg yaw
+	if ! hmc5883 -C -T -S -R 2 start
 	then
-		# hmc5883 internal SPI bus is rotated 90 deg yaw
-	else
-		if lis3mdl start
+		# lis3mdl internal SPI bus is rotated 90 deg yaw
+		if ! lis3mdl start
 		then
-			# lis3mdl internal SPI bus is rotated 90 deg yaw
-		else
 			# BMI055 gyro internal SPI bus
 			bmi055 -G start
 		fi
@@ -257,14 +277,12 @@ then
 	# chip select pin. There are different boards with either one of them and the WHO_AM_I register
 	# will prevent the incorrect driver from a successful initialization.
 
-	if mpu6000 -R 2 -T 20602 start
+	# ICM20602 internal SPI bus ICM-20608-G is rotated 90 deg yaw
+	if ! mpu6000 -R 2 -T 20602 start
 	then
-		# ICM20602 internal SPI bus ICM-20608-G is rotated 90 deg yaw
-	else
-		if mpu6000 -R 2 -T 20608 start
+		# ICM20608 internal SPI bus ICM-20602-G is rotated 90 deg yaw
+		if ! mpu6000 -R 2 -T 20608 start
 		then
-			# ICM20608 internal SPI bus ICM-20602-G is rotated 90 deg yaw
-		else
 			# BMI055 accel internal SPI bus
 			bmi055 -A start
 		fi
@@ -274,44 +292,12 @@ then
 	# chip select pin. There are different boards with either one of them and the WHO_AM_I register
 	# will prevent the incorrect driver from a successful initialization.
 
-	if mpu9250 -R 2 start
+	# mpu9250 internal SPI bus mpu9250 is rotated 90 deg yaw
+	if ! mpu9250 -R 2 start
 	then
-		# mpu9250 internal SPI bus mpu9250 is rotated 90 deg yaw
-	else
 		# BMI160 internal SPI bus
 		bmi160 start
 	fi
-fi
-
-if ver hwcmp MINDPX_V2
-then
-	# External I2C bus
-	hmc5883 -C -T -X start
-
-	# Internal I2C bus
-	hmc5883 -C -T -I -R 12 start
-
-	mpu6000 -s -R 8 start
-	mpu9250 -s -R 8 start
-	lsm303d -R 10 start
-	l3gd20 -R 14 start
-fi
-
-if ver hwcmp OMNIBUS_F4SD
-then
-	if mpu6000 -R 12 -s start
-	then
-	else
-		# some boards such as the Hobbywing XRotor F4 G2 use the ICM-20602
-		mpu6000 -R 12 -T 20602 -s start
-	fi
-
-	# Possible external compasses
-	hmc5883 -X start
-
-	bmp280 start
-
-	adc start
 fi
 
 if ver hwcmp PX4FMU_V4PRO
@@ -330,6 +316,9 @@ then
 
 	# Possible external compasses
 	hmc5883 -C -T -X start
+
+	#RM3100
+	rm3100 start
 fi
 
 if ver hwcmp PX4FMU_V5
@@ -351,12 +340,20 @@ then
 	hmc5883 -C -T -X start
 
 	# Possible external compasses
-
 	ist8310 -C -b 1 start
 	ist8310 -C -b 2 start
 
 	# Possible internal compass
 	ist8310 -C -b 5 start
+fi
+
+if ver hwcmp PX4_SAME70XPLAINED_V1
+then
+	# External I2C bus
+	hmc5883 -C -T -X start
+
+	# Internal SPI bus mpu9250 is rotated 90 deg yaw
+	mpu9250 -R 2 start
 fi
 
 ###############################################################################
@@ -367,7 +364,7 @@ fi
 #                           Begin Optional drivers                            #
 ###############################################################################
 
-if [ ${VEHICLE_TYPE} == fw -o ${VEHICLE_TYPE} == vtol ]
+if [ ${VEHICLE_TYPE} = fw -o ${VEHICLE_TYPE} = vtol ]
 then
 	if param compare CBRK_AIRSPD_CHK 0
 	then
@@ -377,7 +374,7 @@ then
 		# detected as MS5525 because the chip manufacturer was so
 		# clever to assign the same I2C address and skip a WHO_AM_I
 		# register.
-		if [ $BOARD_FMUV3 == 21 ]
+		if [ $BOARD_FMUV3 = 21 ]
 		then
 			ms5525_airspeed start -b 2
 		else
@@ -406,10 +403,16 @@ then
 	ll40ls start i2c
 fi
 
-# Lightware serial lidar sensor
-if param greater SENS_EN_SF0X 0
+# mb12xx sonar sensor
+if param greater SENS_EN_MB12XX 0
 then
-	sf0x start
+	mb12xx start -a
+fi
+
+# pga460 sonar sensor
+if param greater SENS_EN_PGA460 0
+then
+	pga460 start
 fi
 
 # Lightware i2c lidar sensor
@@ -418,59 +421,16 @@ then
 	sf1xx start -a
 fi
 
-# mb12xx sonar sensor
-if param greater SENS_EN_MB12XX 0
+# Heater driver for temperature regulated IMUs.
+if param compare SENS_EN_THERMAL 1
 then
-	mb12xx start -a
+	heater start
 fi
 
 # Teraranger one tof sensor
 if param greater SENS_EN_TRANGER 0
 then
 	teraranger start -a
-fi
-
-# Benewake TFMini
-if param greater SENS_EN_TFMINI 0
-then
-	if ver hwcmp PX4FMU_V2 PX4FMU_V4PRO
-	then
-		# start the driver on serial 4/5
-		tfmini start -d /dev/ttyS6
-	else
-		if ver hwcmp AEROFC_V1
-		then
-			# start the driver on telemetry
-			tfmini start -d /dev/ttyS3
-		else
-			if param compare SYS_COMPANION 0
-			then
-				# start on default mavlink companion device
-				tfmini start -d /dev/ttyS2
-			fi
-		fi
-	fi
-fi
-
-# LeddarOne
-if param greater SENS_EN_LEDDAR1 0
-then
-	if ver hwcmp PX4FMU_V2 PX4FMU_V4PRO
-	then
-		# start the driver on serial 4/5
-		leddar_one -d /dev/ttyS6 start
-	fi
-	if ver hwcmp AEROFC_V1
-	then
-		# start the driver on telemetry
-		leddar_one -d /dev/ttyS3 start
-	else
-		if param compare SYS_COMPANION 0
-		then
-			# start on default mavlink companion device
-			leddar_one -d /dev/ttyS2 start
-		fi
-	fi
 fi
 
 ###############################################################################

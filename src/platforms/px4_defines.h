@@ -111,6 +111,7 @@ typedef param_t px4_param_t;
  ****************************************************************************/
 
 #define PX4_ROOTFSDIR ""
+#define PX4_STORAGEDIR PX4_ROOTFSDIR "/fs/microsd"
 #define _PX4_IOC(x,y) _IOC(x,y)
 
 // mode for open with O_CREAT
@@ -173,7 +174,7 @@ using ::isfinite;
 
 // QURT specific
 #  include "dspal_math.h"
-#  define PX4_ROOTFSDIR ""
+#  define PX4_ROOTFSDIR "."
 #  define PX4_TICKS_PER_SEC 1000L
 #  define SIOCDEVPRIVATE 999999
 
@@ -196,10 +197,12 @@ __END_DECLS
 #  elif defined(__PX4_POSIX_BEBOP)
 #    define PX4_ROOTFSDIR "/data/ftp/internal_000"
 #  else
-#    define PX4_ROOTFSDIR "rootfs"
+#    define PX4_ROOTFSDIR "."
 #  endif
 
 #endif // __PX4_QURT
+
+#define PX4_STORAGEDIR PX4_ROOTFSDIR
 #endif // __PX4_POSIX
 
 #if defined(__PX4_ROS) || defined(__PX4_POSIX)

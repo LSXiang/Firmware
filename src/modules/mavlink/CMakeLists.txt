@@ -59,6 +59,8 @@ px4_add_module(
 		mavlink_stream.cpp
 		mavlink_ulog.cpp
 		mavlink_timesync.cpp
+	MODULE_CONFIG
+		module.yaml
 	DEPENDS
 		airspeed
 		git_mavlink_v2
@@ -66,4 +68,5 @@ px4_add_module(
 		git_ecl
 		ecl_geo
 		version
+	UNITY_BUILD
 	)

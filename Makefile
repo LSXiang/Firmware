@@ -114,6 +114,28 @@ endif
 
 ifdef PX4_CMAKE_BUILD_TYPE
 	CMAKE_ARGS += -DCMAKE_BUILD_TYPE=${PX4_CMAKE_BUILD_TYPE}
+else
+
+	# Address Sanitizer
+	ifdef PX4_ASAN
+		CMAKE_ARGS += -DCMAKE_BUILD_TYPE=AddressSanitizer
+	endif
+
+	# Memory Sanitizer
+	ifdef PX4_MSAN
+		CMAKE_ARGS += -DCMAKE_BUILD_TYPE=MemorySanitizer
+	endif
+
+	# Thread Sanitizer
+	ifdef PX4_TSAN
+		CMAKE_ARGS += -DCMAKE_BUILD_TYPE=ThreadSanitizer
+	endif
+
+	# Undefined Behavior Sanitizer
+	ifdef PX4_UBSAN
+		CMAKE_ARGS += -DCMAKE_BUILD_TYPE=UndefinedBehaviorSanitizer
+	endif
+
 endif
 
 # Functions
@@ -267,6 +289,7 @@ doxygen:
 	@mkdir -p $(SRC_DIR)/build/doxygen
 	@cd $(SRC_DIR)/build/doxygen && cmake $(SRC_DIR) $(CMAKE_ARGS) -G"$(PX4_CMAKE_GENERATOR)" -DCONFIG=posix_sitl_default -DBUILD_DOXYGEN=ON
 	@$(PX4_MAKE) -C $(SRC_DIR)/build/doxygen
+	@touch $(SRC_DIR)/build/doxygen/Documentation/.nojekyll
 
 # Astyle
 # --------------------------------------------------------------------
@@ -305,7 +328,7 @@ tests_mission_coverage:
 	@$(MAKE) clean
 	@$(MAKE) --no-print-directory posix_sitl_default PX4_CMAKE_BUILD_TYPE=Coverage
 	@$(MAKE) --no-print-directory posix_sitl_default sitl_gazebo PX4_CMAKE_BUILD_TYPE=Coverage
-	@$(SRC_DIR)/test/rostest_px4_run.sh mavros_posix_test_mission.test mission:=vtol_new_1 vehicle:=standard_vtol
+	@$(SRC_DIR)/test/rostest_px4_run.sh mavros_posix_test_mission.test mission:=VTOL_mission_1 vehicle:=standard_vtol
 	@$(MAKE) --no-print-directory posix_sitl_default generate_coverage
 
 tests_offboard: rostest
@@ -324,7 +347,8 @@ python_coverage:
 
 # static analyzers (scan-build, clang-tidy, cppcheck)
 # --------------------------------------------------------------------
-.PHONY: scan-build posix_sitl_default-clang clang-tidy clang-tidy-fix clang-tidy-quiet cppcheck
+.PHONY: scan-build posix_sitl_default-clang clang-tidy clang-tidy-fix clang-tidy-quiet
+.PHONY: cppcheck shellcheck_all validate_module_configs
 
 scan-build:
 	@export CCC_CC=clang
@@ -358,6 +382,13 @@ cppcheck: posix_sitl_default
 	@mkdir -p $(SRC_DIR)/build/cppcheck
 	@cppcheck -i$(SRC_DIR)/src/examples --enable=performance --std=c++11 --std=c99 --std=posix --project=$(SRC_DIR)/build/posix_sitl_default/compile_commands.json --xml-version=2 2> $(SRC_DIR)/build/cppcheck/cppcheck-result.xml > /dev/null
 	@cppcheck-htmlreport --source-encoding=ascii --file=$(SRC_DIR)/build/cppcheck/cppcheck-result.xml --report-dir=$(SRC_DIR)/build/cppcheck --source-dir=$(SRC_DIR)/src/
+
+shellcheck_all:
+	@$(SRC_DIR)/Tools/run-shellcheck.sh $(SRC_DIR)/ROMFS/px4fmu_common/
+	@make px4fmu-v2_default shellcheck
+
+validate_module_configs:
+	@find $(SRC_DIR)/src/modules $(SRC_DIR)/src/drivers $(SRC_DIR)/src/lib -name *.yaml -type f -print0 | xargs -0 $(SRC_DIR)/Tools/validate_yaml.py --schema-file $(SRC_DIR)/validation/module_schema.yaml
 
 # Cleanup
 # --------------------------------------------------------------------

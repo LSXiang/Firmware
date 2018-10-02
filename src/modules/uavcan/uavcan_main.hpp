@@ -44,7 +44,7 @@
 
 #include <px4_config.h>
 
-#include <uavcan_stm32/uavcan_stm32.hpp>
+#include "uavcan_driver.hpp"
 #include <uavcan/helpers/heap_based_pool_allocator.hpp>
 #include <uavcan/protocol/global_time_sync_master.hpp>
 #include <uavcan/protocol/global_time_sync_slave.hpp>
@@ -77,7 +77,7 @@
 /**
  * A UAVCAN node.
  */
-class UavcanNode : public device::CDev
+class UavcanNode : public cdev::CDev
 {
 	static constexpr unsigned MaxBitRatePerSec	= 1000000;
 	static constexpr unsigned bitPerFrame		= 148;
@@ -103,7 +103,7 @@ class UavcanNode : public device::CDev
 	static constexpr unsigned StackSize		= 2400;
 
 public:
-	typedef uavcan_stm32::CanInitHelper<RxQueueLenPerIface> CanInitHelper;
+	typedef UAVCAN_DRIVER::CanInitHelper<RxQueueLenPerIface> CanInitHelper;
 	enum eServerAction {None, Start, Stop, CheckFW, Busy};
 
 	UavcanNode(uavcan::ICanDriver &can_driver, uavcan::ISystemClock &system_clock);

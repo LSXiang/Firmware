@@ -16,7 +16,7 @@ then
 
 	set OUTPUT_DEV /dev/pwm_output0
 
-	if [ $OUTPUT_MODE == tap_esc ]
+	if [ $OUTPUT_MODE = tap_esc ]
 	then
 		set OUTPUT_DEV /dev/tap_esc
 	fi
@@ -27,7 +27,7 @@ then
 	else
 		echo "ERROR [init] Error loading mixer: $MIXER_FILE"
 		echo "ERROR:[init] Could not load mixer: $MIXER_FILE" >> $LOG_FILE
-		tone_alarm $TUNE_ERR
+		tune_control play -t 20
 	fi
 
 	unset MIXER_FILE
@@ -36,11 +36,11 @@ else
 	then
 		echo "ERROR [init] Mixer not defined"
 		echo "ERROR [init] Mixer not defined" >> $LOG_FILE
-		tone_alarm $TUNE_ERR
+		tune_control play -t 20
 	fi
 fi
 
-if [ $OUTPUT_MODE == fmu -o $OUTPUT_MODE == io ]
+if [ $OUTPUT_MODE = fmu -o $OUTPUT_MODE = io ]
 then
 	if [ $PWM_OUT != none ]
 	then

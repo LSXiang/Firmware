@@ -321,8 +321,6 @@
 #define BOARD_HAS_RX_TX_SWAP               1 /* HW Can swap TX and RX */
 #define RC_SERIAL_PORT_IS_SWAPED           0 /* Board wired with RC's TX is on cpu RX */
 
-#define GPS_DEFAULT_UART_PORT "/dev/ttyS5" /* UART7 */
-
 /* Power switch controls ******************************************************/
 
 #define SDIO_SLOTNO                    0  /* Only one slot */
@@ -401,6 +399,8 @@
 
 #define PX4_GPIO_INIT_LIST { \
 		PX4_ADC_GPIO,                     \
+		GPIO_CAN1_RX,                     \
+		GPIO_CAN1_TX,                     \
 	}
 
 __BEGIN_DECLS

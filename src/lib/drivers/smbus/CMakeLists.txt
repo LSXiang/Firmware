@@ -31,16 +31,4 @@
 #
 ############################################################################
 
-px4_add_romfs_files(
-	4001_quad_x
-	6001_hexa_x
-	rc.fw_apps
-	rc.fw_defaults
-	rc.interface
-	rc.mc_apps
-	rc.mc_defaults
-	rcS
-	rc.sensors
-	rc.vtol_apps
-	rc.vtol_defaults
-	)
+px4_add_library(drivers__smbus SMBus.cpp)

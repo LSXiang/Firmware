@@ -11,12 +11,15 @@ rtps:
     id: 4
   - msg: airspeed
     id: 5
+    send: true
   - msg: battery_status
     id: 6
+    send: true
   - msg: camera_capture
     id: 7
   - msg: camera_trigger
     id: 8
+    receive: true
   - msg: collision_report
     id: 9
   - msg: commander_state
@@ -25,12 +28,16 @@ rtps:
     id: 11
   - msg: debug_key_value
     id: 12
+    receive: true
   - msg: debug_value
     id: 13
+    receive: true
   - msg: debug_vect
     id: 14
+    receive: true
   - msg: differential_pressure
     id: 15
+    send: true
   - msg: distance_sensor
     id: 16
   - msg: ekf2_innovations
@@ -43,10 +50,13 @@ rtps:
     id: 20
   - msg: esc_report
     id: 21
+    send: true
   - msg: esc_status
     id: 22
+    send: true
   - msg: estimator_status
     id: 23
+    send: true
   - msg: follow_target
     id: 24
   - msg: geofence_result
@@ -61,6 +71,7 @@ rtps:
     id: 29
   - msg: iridiumsbd_status
     id: 30
+    send: true
   - msg: irlock_report
     id: 31
   - msg: landing_target_innovation
@@ -85,10 +96,12 @@ rtps:
     id: 41
   - msg: obstacle_distance
     id: 42
+    receive: true
   - msg: offboard_control_mode
     id: 43
   - msg: optical_flow
     id: 44
+    receive: true
   - msg: parameter_update
     id: 45
   - msg: ping
@@ -111,8 +124,10 @@ rtps:
     id: 54
   - msg: radio_status
     id: 55
+    send: true
   - msg: rate_ctrl_status
     id: 56
+    send: true
   - msg: rc_channels
     id: 57
   - msg: rc_parameter_map
@@ -121,36 +136,50 @@ rtps:
     id: 59
   - msg: satellite_info
     id: 60
+    send: true
   - msg: sensor_accel
     id: 61
+    send: true
   - msg: sensor_baro
     id: 62
+    send: true
   - msg: sensor_bias
     id: 63
+    send: true
   - msg: sensor_combined
     id: 64
+    send: true
   - msg: sensor_correction
     id: 65
+    send: true
   - msg: sensor_gyro
     id: 66
+    send: true
   - msg: sensor_mag
     id: 67
+    send: true
   - msg: sensor_preflight
     id: 68
+    send: true
   - msg: sensor_selection
     id: 69
+    send: true
   - msg: servorail_status
     id: 70
+    send: true
   - msg: subsystem_info
     id: 71
+    send: true
   - msg: system_power
     id: 72
   - msg: task_stack_info
     id: 73
   - msg: tecs_status
     id: 74
+    send: true
   - msg: telemetry_status
     id: 75
+    send: true
   - msg: test_motor
     id: 76
   - msg: timesync_status
@@ -159,6 +188,7 @@ rtps:
     id: 78
   - msg: transponder_report
     id: 79
+    send: true
   - msg: tune_control
     id: 80
   - msg: uavcan_parameter_request
@@ -185,10 +215,13 @@ rtps:
     id: 91
   - msg: vehicle_global_position
     id: 92
+    send: true
   - msg: vehicle_gps_position
     id: 93
+    send: true
   - msg: vehicle_land_detected
     id: 94
+    send: true
   - msg: vehicle_local_position
     id: 95
   - msg: vehicle_local_position_setpoint
@@ -197,18 +230,21 @@ rtps:
     id: 97
   - msg: vehicle_odometry
     id: 98
+    send: true
   - msg: vehicle_rates_setpoint
     id: 99
   - msg: vehicle_roi
     id: 100
   - msg: vehicle_status
     id: 101
+    send: true
   - msg: vehicle_status_flags
     id: 102
   - msg: vehicle_trajectory_waypoint
     id: 103
   - msg: vtol_vehicle_status
     id: 104
+    send: true
   - msg: wind_estimate
     id: 105
   # multi topics
@@ -236,10 +272,12 @@ rtps:
     id: 130
   - msg: vehicle_local_position_groundtruth
     id: 131
-  - msg: vehicle_mocap_odometry
-    id: 132
-  - msg: vehicle_visual_odometry
-    id: 133
+  # - msg: vehicle_mocap_odometry
+  #   id: 132
+  #   receive: true
+  # - msg: vehicle_visual_odometry
+  #   id: 133
+  #   receive: true
   - msg: mc_virtual_rates_setpoint
     id: 134
   - msg: fw_virtual_rates_setpoint

@@ -1,7 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (c) 2012-2016 PX4 Development Team. All rights reserved.
- *         Author: David Sidrane <david_s5@nscdg.com>
+ *   Copyright (c) 2018 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,76 +31,50 @@
  *
  ****************************************************************************/
 
-/**
- * @file tap-v1_led.c
- *
- * TAP_V1 LED backend.
- */
+#include <drivers/device/i2c.h>
 
-#include <px4_config.h>
+#include <string.h>
 
-#include <stdbool.h>
+#define SMBUS_PEC_POLYNOMIAL	0x07	///< Polynomial for calculating PEC
 
-#include "stm32.h"
-#include "board_config.h"
-
-#include <arch/board/board.h>
-
-/*
- * Ideally we'd be able to get these from up_internal.h,
- * but since we want to be able to disable the NuttX use
- * of leds for system indication at will and there is no
- * separate switch, we need to build independent of the
- * CONFIG_ARCH_LEDS configuration switch.
- */
-__BEGIN_DECLS
-extern void led_init(void);
-extern void led_on(int led);
-extern void led_off(int led);
-extern void led_toggle(int led);
-__END_DECLS
-
-__EXPORT void led_init(void)
+class SMBus : public device::I2C
 {
-	/* Configure LED1-2 GPIOs for output */
+public:
+	SMBus(int bus_num, uint16_t address);
+	~SMBus();
 
-	stm32_configgpio(GPIO_BLUE_LED);
-	stm32_configgpio(GPIO_RED_LED);
-}
+	/**
+	 * @brief Sends a block write command.
+	 * @param cmd_code The command code.
+	 * @param data The data to be written.
+	 * @param length The number of bytes being written.
+	 * @return Returns PX4_OK on success, PX4_ERROR on failure.
+	 */
+	int block_write(const uint8_t cmd_code, void *data, uint8_t byte_count, bool use_pec);
 
-__EXPORT void led_on(int led)
-{
-	if (led == 0) {
-		/* Pull down to switch on */
-		stm32_gpiowrite(GPIO_BLUE_LED, false);
-	}
+	/**
+	 * @brief Sends a block read command.
+	 * @param cmd_code The command code.
+	 * @param data The returned data.
+	 * @param length The number of bytes being read
+	 * @return Returns PX4_OK on success, PX4_ERROR on failure.
+	 */
+	int block_read(const uint8_t cmd_code, void *data, const uint8_t length, bool use_pec);
 
-	if (led == 1) {
-		/* Pull down to switch on */
-		stm32_gpiowrite(GPIO_RED_LED, false);
-	}
-}
+	/**
+	 * @brief Sends a read word command.
+	 * @param cmd_code The command code.
+	 * @param data The 2 bytes of returned data plus a 1 byte CRC if used.
+	 * @return Returns PX4_OK on success, PX4_ERROR on failure.
+	 */
+	int read_word(const uint8_t cmd_code, void *data);
 
-__EXPORT void led_off(int led)
-{
-	if (led == 0) {
-		/* Pull up to switch off */
-		stm32_gpiowrite(GPIO_BLUE_LED, true);
-	}
+	/**
+	 * @brief Calculates the PEC from the data.
+	 * @param buffer The buffer that stores the data to perform the CRC over.
+	 * @param length The number of bytes being written.
+	 * @return Returns PX4_OK on success, PX4_ERROR on failure.
+	 */
+	uint8_t get_pec(uint8_t *buffer, uint8_t length);
 
-	if (led == 1) {
-		/* Pull up to switch off */
-		stm32_gpiowrite(GPIO_RED_LED, true);
-	}
-}
-
-__EXPORT void led_toggle(int led)
-{
-	if (led == 0) {
-		stm32_gpiowrite(GPIO_BLUE_LED, !stm32_gpioread(GPIO_BLUE_LED));
-	}
-
-	if (led == 1) {
-		stm32_gpiowrite(GPIO_RED_LED, !stm32_gpioread(GPIO_RED_LED));
-	}
-}
+};

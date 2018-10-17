@@ -54,23 +54,22 @@ void PositionControl::updateState(const PositionControlStates &states)
 	_vel_dot = states.acceleration;
 }
 
-void PositionControl::updateSetpoint(const vehicle_local_position_setpoint_s &setpoint)
+bool PositionControl::updateSetpoint(const vehicle_local_position_setpoint_s &setpoint)
 {
-	// If full manual is required (thrust already generated), don't run position/velocity
-	// controller and just return thrust.
-	_skip_controller = false;
-
 	_pos_sp = Vector3f(setpoint.x, setpoint.y, setpoint.z);
 	_vel_sp = Vector3f(setpoint.vx, setpoint.vy, setpoint.vz);
 	_acc_sp = Vector3f(setpoint.acc_x, setpoint.acc_y, setpoint.acc_z);
 	_thr_sp = Vector3f(setpoint.thrust);
 	_yaw_sp = setpoint.yaw;
 	_yawspeed_sp = setpoint.yawspeed;
-	_interfaceMapping();
+	bool mapping_succeeded = _interfaceMapping();
 
-	if (PX4_ISFINITE(setpoint.thrust[0]) && PX4_ISFINITE(setpoint.thrust[1]) && PX4_ISFINITE(setpoint.thrust[2])) {
-		_skip_controller = true;
-	}
+	// If full manual is required (thrust already generated), don't run position/velocity
+	// controller and just return thrust.
+	_skip_controller = PX4_ISFINITE(setpoint.thrust[0]) && PX4_ISFINITE(setpoint.thrust[1])
+			   && PX4_ISFINITE(setpoint.thrust[2]);
+
+	return mapping_succeeded;
 }
 
 void PositionControl::generateThrustYawSetpoint(const float dt)
@@ -98,7 +97,7 @@ void PositionControl::generateThrustYawSetpoint(const float dt)
 	}
 }
 
-void PositionControl::_interfaceMapping()
+bool PositionControl::_interfaceMapping()
 {
 	// if noting is valid, then apply failsafe landing
 	bool failsafe = false;
@@ -201,14 +200,14 @@ void PositionControl::_interfaceMapping()
 
 	// check failsafe
 	if (failsafe) {
-		_skip_controller = true;
-
 		// point the thrust upwards
 		_thr_sp(0) = _thr_sp(1) = 0.0f;
 		// throttle down such that vehicle goes down with
 		// 70% of throttle range between min and hover
 		_thr_sp(2) = -(MPC_THR_MIN.get() + (MPC_THR_HOVER.get() - MPC_THR_MIN.get()) * 0.7f);
 	}
+
+	return !(failsafe);
 }
 
 void PositionControl::_positionController()

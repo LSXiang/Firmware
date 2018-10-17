@@ -33,6 +33,7 @@
 
 #include "batt_smbus.h"
 #include <px4_module.h>
+#include <px4_getopt.h>
 
 extern "C" __EXPORT int batt_smbus_main(int argc, char *argv[]);
 
@@ -56,9 +57,17 @@ struct batt_smbus_bus_option {
 	uint8_t busnum;
 	BATT_SMBUS      *dev;
 } bus_options[] = {
-	{ BATT_SMBUS_BUS_I2C_EXTERNAL, "/dev/batt_smbus_ext", &BATT_SMBUS_I2C_interface, PX4_I2C_BUS_EXPANSION, nullptr },
 #ifdef PX4_I2C_BUS_ONBOARD
 	{ BATT_SMBUS_BUS_I2C_INTERNAL, "/dev/batt_smbus_int", &BATT_SMBUS_I2C_interface, PX4_I2C_BUS_ONBOARD, nullptr },
+#endif
+#ifdef PX4_I2C_BUS_EXPANSION
+	{ BATT_SMBUS_BUS_I2C_EXTERNAL, "/dev/batt_smbus_ext", &BATT_SMBUS_I2C_interface, PX4_I2C_BUS_EXPANSION, nullptr },
+#endif
+#ifdef PX4_I2C_BUS_EXPANSION1
+	{ BATT_SMBUS_BUS_I2C_EXTERNAL, "/dev/batt_smbus_ext1", &BATT_SMBUS_I2C_interface, PX4_I2C_BUS_EXPANSION1, nullptr },
+#endif
+#ifdef PX4_I2C_BUS_EXPANSION2
+	{ BATT_SMBUS_BUS_I2C_EXTERNAL, "/dev/batt_smbus_ext2", &BATT_SMBUS_I2C_interface, PX4_I2C_BUS_EXPANSION2, nullptr },
 #endif
 };
 
@@ -116,6 +125,7 @@ bool start_bus(struct batt_smbus_bus_option &bus)
 int start(enum BATT_SMBUS_BUS busid)
 {
 	for (unsigned i = 0; i < NUM_BUS_OPTIONS; i++) {
+
 		if (busid == BATT_SMBUS_BUS_ALL && bus_options[i].dev != nullptr) {
 			// This device is already started.
 			PX4_INFO("Smart battery %d already started", bus_options[i].dev);
@@ -132,7 +142,11 @@ int start(enum BATT_SMBUS_BUS busid)
 		}
 
 		PX4_INFO("Smart battery failed to start");
-		return PX4_ERROR;
+
+		if (busid != BATT_SMBUS_BUS_ALL) {
+			return PX4_ERROR;
+		}
+
 	}
 
 	return PX4_ERROR;
@@ -285,13 +299,14 @@ int
 batt_smbus_main(int argc, char *argv[])
 {
 	enum BATT_SMBUS_BUS busid = BATT_SMBUS_BUS_I2C_EXTERNAL;
+	int myoptind = 1;
 	int ch;
-
+	const char* myoptarg = nullptr;
 
 	// Jump over start/off/etc and look at options first.
-	while ((ch = getopt(argc, argv, "XIA:")) != EOF) {
+	while ((ch = px4_getopt(argc, argv, "XIA",&myoptind,&myoptarg)) != EOF) {
 		switch (ch) {
-		case 'X':
+		case 'X': //TODO: add option for starting specific external bus
 			busid = BATT_SMBUS_BUS_I2C_EXTERNAL;
 			break;
 
@@ -309,7 +324,7 @@ batt_smbus_main(int argc, char *argv[])
 		}
 	}
 
-	const char *input = argv[optind];
+	const char *input = argv[myoptind];
 
 	if(!input) {
 		batt_smbus::usage("Please enter an appropriate command.");

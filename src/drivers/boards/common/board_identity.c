@@ -1,7 +1,7 @@
 /****************************************************************************
  *
- *   Copyright (c) 2012-2016 PX4 Development Team. All rights reserved.
- *         Author: David Sidrane <david_s5@nscdg.com>
+ *   Copyright (C) 2017 PX4 Development Team. All rights reserved.
+ *   Author: @author David Sidrane <david_s5@nscdg.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -33,53 +33,68 @@
  ****************************************************************************/
 
 /**
- * @file tap-v1_spi.c
- *
- * Board-specific SPI functions.
+ * @file board_identity.c
+ * Implementation of Non Arch specific Board identity API
  */
 
-/************************************************************************************
- * Included Files
- ************************************************************************************/
-
 #include <px4_config.h>
+#include <stdio.h>
+#include <string.h>
+#if defined(BOARD_OVERRIDE_UUID) || defined(BOARD_OVERRIDE_MFGUID) || defined(BOARD_OVERRIDE_PX4_GUID)
+static const uint16_t soc_arch_id = PX4_SOC_ARCH_ID;
+static const char board_uuid[17] = BOARD_OVERRIDE_UUID;
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <debug.h>
-
-#include <nuttx/spi/spi.h>
-#include <arch/board/board.h>
-
-#include "board_config.h"
-
-/************************************************************************************
- * Public Functions
- ************************************************************************************/
-
-/************************************************************************************
- * Name: stm32_spiinitialize
- *
- * Description:
- *   Called to configure SPI chip select GPIO pins for the tap-v1 board.
- *
- ************************************************************************************/
-
-__EXPORT void stm32_spiinitialize(void)
+void board_get_uuid32(uuid_uint32_t uuid_words)
 {
-	stm32_configgpio(GPIO_SPI_CS_SDCARD);
-	stm32_configgpio(GPIO_SPI_SD_SW);
+	unsigned int len = strlen(board_uuid);
+
+	if (len > PX4_CPU_UUID_BYTE_LENGTH) {
+		len = PX4_CPU_UUID_BYTE_LENGTH;
+	}
+
+	uint8_t *bp = (uint8_t *) uuid_words;
+
+	for (unsigned int i = 0; i < len; i++) {
+		*bp++ = board_uuid[i];
+	}
+
+	for (unsigned int i = len; i < PX4_CPU_UUID_BYTE_LENGTH; i++) {
+		*bp++ = '0';
+	}
+}
+
+int board_get_uuid32_formated(char *format_buffer, int size,
+			      const char *format,
+			      const char *seperator)
+{
+	uuid_uint32_t uuid;
+	board_get_uuid32(uuid);
+	int offset = 0;
+	int sep_size = seperator ? strlen(seperator) : 0;
+
+	for (unsigned i = 0; i < PX4_CPU_UUID_WORD32_LENGTH; i++) {
+		offset += snprintf(&format_buffer[offset], size - offset, format, uuid[i]);
+
+		if (sep_size && i < PX4_CPU_UUID_WORD32_LENGTH - 1) {
+			strcat(&format_buffer[offset], seperator);
+			offset += sep_size;
+		}
+	}
+
+	return 0;
+}
+
+int board_get_mfguid_formated(char *format_buffer, int size)
+{
+	board_get_uuid32_formated(format_buffer, size, "%02x", NULL);
+	return strlen(format_buffer);
 }
 
 
-__EXPORT void stm32_spi2select(FAR struct spi_dev_s *dev, uint32_t devid, bool selected)
+int board_get_px4_guid_formated(char *format_buffer, int size)
 {
-	/* there can only be one device on this bus, so always select it */
-	stm32_gpiowrite(GPIO_SPI_CS_SDCARD, !selected);
+	int offset = snprintf(format_buffer, size, "%04x", soc_arch_id);
+	size -= offset;
+	return board_get_mfguid_formated(&format_buffer[offset], size);
 }
-
-__EXPORT uint8_t stm32_spi2status(FAR struct spi_dev_s *dev, uint32_t devid)
-{
-	return !stm32_gpioread(GPIO_SPI_SD_SW);
-}
-
+#endif

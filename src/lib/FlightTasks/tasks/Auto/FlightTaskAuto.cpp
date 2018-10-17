@@ -136,7 +136,7 @@ bool FlightTaskAuto::_evaluateTriplets()
 		} else {
 			tmp_target(0) = _lock_position_xy(0);
 			tmp_target(1) = _lock_position_xy(1);
-			_lock_position_xy *= NAN;
+			_lock_position_xy.setAll(NAN);
 		}
 
 	} else {
@@ -160,6 +160,7 @@ bool FlightTaskAuto::_evaluateTriplets()
 
 	} else {
 		_triplet_target = tmp_target;
+		_target_acceptance_radius = _sub_triplet_setpoint->get().current.acceptance_radius;
 
 		if (!PX4_ISFINITE(_triplet_target(0)) || !PX4_ISFINITE(_triplet_target(1))) {
 			// Horizontal target is not finite.
@@ -239,39 +240,36 @@ void FlightTaskAuto::_set_heading_from_mode()
 
 	switch (MPC_YAW_MODE.get()) {
 
-	case 0: { // Heading points towards the current waypoint.
-			v = Vector2f(_target) - Vector2f(_position);
-			break;
+	case 0: // Heading points towards the current waypoint.
+		v = Vector2f(_target) - Vector2f(_position);
+		break;
+
+	case 1: // Heading points towards home.
+		if (_sub_home_position->get().valid_hpos) {
+			v = Vector2f(&_sub_home_position->get().x) - Vector2f(_position);
 		}
 
-	case 1: { // Heading points towards home.
-			if (_sub_home_position->get().valid_hpos) {
-				v = Vector2f(&_sub_home_position->get().x) - Vector2f(_position);
-			}
+		break;
 
-			break;
+	case 2: // Heading point away from home.
+		if (_sub_home_position->get().valid_hpos) {
+			v = Vector2f(_position) - Vector2f(&_sub_home_position->get().x);
 		}
 
-	case 2: { // Heading point away from home.
-			if (_sub_home_position->get().valid_hpos) {
-				v = Vector2f(_position) - Vector2f(&_sub_home_position->get().x);
-			}
+		break;
 
-			break;
-		}
-
-	case 3: { // Along trajectory.
-			// The heading depends on the kind of setpoint generation. This needs to be implemented
-			// in the subclasses where the velocity setpoints are generated.
-			v *= NAN;
-		}
+	case 3: // Along trajectory.
+		// The heading depends on the kind of setpoint generation. This needs to be implemented
+		// in the subclasses where the velocity setpoints are generated.
+		v.setAll(NAN);
+		break;
 	}
 
 	if (PX4_ISFINITE(v.length())) {
 		// We only adjust yaw if vehicle is outside of acceptance radius. Once we enter acceptance
 		// radius, lock yaw to current yaw.
 		// This prevents excessive yawing.
-		if (v.length() > NAV_ACC_RAD.get()) {
+		if (v.length() > _target_acceptance_radius) {
 			_compute_heading_from_2D_vector(_yaw_setpoint, v);
 			_yaw_lock = false;
 
@@ -334,7 +332,7 @@ void FlightTaskAuto::_checkAvoidanceProgress()
 
 	const float pos_to_target_z = fabsf(_triplet_target(2) - _position(2));
 
-	if (pos_to_target.length() < NAV_ACC_RAD.get() && pos_to_target_z > NAV_MC_ALT_RAD.get()) {
+	if (pos_to_target.length() < _target_acceptance_radius && pos_to_target_z > NAV_MC_ALT_RAD.get()) {
 		// vehicle above or below the target waypoint
 		pos_control_status.altitude_acceptance = pos_to_target_z + 0.5f;
 	}
@@ -482,7 +480,7 @@ void FlightTaskAuto::_updateInternalWaypoints()
 			// angle goes from 0 to 2 with 0 = large angle, 2 = small angle:   0 = PI ; 2 = PI*0
 
 			if (Vector2f(_target - _next_wp).length() > 0.001f &&
-			    (Vector2f(_target - _prev_wp).length() > NAV_ACC_RAD.get())) {
+			    (Vector2f(_target - _prev_wp).length() >  _target_acceptance_radius)) {
 
 				angle = Vector2f(_target - _prev_wp).unit_or_zero()
 					* Vector2f(_target - _next_wp).unit_or_zero()
@@ -495,6 +493,7 @@ void FlightTaskAuto::_updateInternalWaypoints()
 	case State::previous_infront: {
 			_next_wp = _triplet_target;
 			_target = _triplet_prev_wp;
+			_target_acceptance_radius = _sub_triplet_setpoint->get().previous.acceptance_radius;
 			_prev_wp = _position;
 
 			float angle = 2.0f;
@@ -503,7 +502,7 @@ void FlightTaskAuto::_updateInternalWaypoints()
 			// angle = cos(x) + 1.0
 			// angle goes from 0 to 2 with 0 = large angle, 2 = small angle:   0 = PI ; 2 = PI*0
 			if (Vector2f(_target - _next_wp).length() > 0.001f &&
-			    (Vector2f(_target - _prev_wp).length() > NAV_ACC_RAD.get())) {
+			    (Vector2f(_target - _prev_wp).length() > _target_acceptance_radius)) {
 
 				angle = Vector2f(_target - _prev_wp).unit_or_zero()
 					* Vector2f(_target - _next_wp).unit_or_zero()
@@ -524,7 +523,7 @@ void FlightTaskAuto::_updateInternalWaypoints()
 			// angle = cos(x) + 1.0
 			// angle goes from 0 to 2 with 0 = large angle, 2 = small angle:   0 = PI ; 2 = PI*0
 			if (Vector2f(_target - _next_wp).length() > 0.001f &&
-			    (Vector2f(_target - _prev_wp).length() > NAV_ACC_RAD.get())) {
+			    (Vector2f(_target - _prev_wp).length() > _target_acceptance_radius)) {
 
 				angle = Vector2f(_target - _prev_wp).unit_or_zero()
 					* Vector2f(_target - _next_wp).unit_or_zero()
@@ -545,7 +544,7 @@ void FlightTaskAuto::_updateInternalWaypoints()
 			// angle = cos(x) + 1.0
 			// angle goes from 0 to 2 with 0 = large angle, 2 = small angle:   0 = PI ; 2 = PI*0
 			if (Vector2f(_target - _next_wp).length() > 0.001f &&
-			    (Vector2f(_target - _prev_wp).length() > NAV_ACC_RAD.get())) {
+			    (Vector2f(_target - _prev_wp).length() > _target_acceptance_radius)) {
 
 				angle =
 					Vector2f(_target - _prev_wp).unit_or_zero()

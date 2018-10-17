@@ -32,7 +32,7 @@
  ****************************************************************************/
 #pragma once
 /*
- * This file is a shim to bridge to nuttx_v3
+ * This file is a shim to bridge to the many SoC architecture supported by PX4
  */
 
 #ifdef __PX4_NUTTX
@@ -57,6 +57,7 @@ __BEGIN_DECLS
 
 #    if defined(CONFIG_ARCH_CHIP_STM32)
 #      include <stm32.h>
+#      define PX4_SOC_ARCH_ID             PX4_SOC_ARCH_ID_STM32F4
 #      define PX4_FLASH_BASE  STM32_FLASH_BASE
 #      if defined(CONFIG_STM32_STM32F4XXX)
 #        include <stm32_bbsram.h>
@@ -67,6 +68,7 @@ __BEGIN_DECLS
 #    endif
 
 #    if defined(CONFIG_ARCH_CHIP_STM32F7)
+#      define PX4_SOC_ARCH_ID             PX4_SOC_ARCH_ID_STM32F7
 #      include <chip.h>
 #      include <up_internal.h> //include up_systemreset() which is included on stm32.h
 #      include <stm32_bbsram.h>
@@ -144,14 +146,15 @@ __BEGIN_DECLS
 #endif // defined(CONFIG_ARCH_CHIP_STM32) || defined(CONFIG_ARCH_CHIP_STM32F7)
 
 #if defined(CONFIG_ARCH_CHIP_KINETIS)
+#    define PX4_SOC_ARCH_ID             PX4_SOC_ARCH_ID_KINETISK66
 
 #    // Fixme: using ??
-#    define PX4_BBSRAM_SIZE          2048
-#    define PX4_BBSRAM_GETDESC_IOCTL 0
-#    define PX4_NUMBER_I2C_BUSES     KINETIS_NI2C
+#    define PX4_BBSRAM_SIZE             2048
+#    define PX4_BBSRAM_GETDESC_IOCTL    0
+#    define PX4_NUMBER_I2C_BUSES        KINETIS_NI2C
 
-#    define GPIO_OUTPUT_SET          GPIO_OUTPUT_ONE
-#    define GPIO_OUTPUT_CLEAR        GPIO_OUTPUT_ZER0
+#    define GPIO_OUTPUT_SET             GPIO_OUTPUT_ONE
+#    define GPIO_OUTPUT_CLEAR           GPIO_OUTPUT_ZER0
 
 #    include <chip.h>
 #    include <kinetis_spi.h>
@@ -217,10 +220,12 @@ __BEGIN_DECLS
 #    include <sam_spi.h>
 #    include <sam_twihs.h>
 
+#    define PX4_SOC_ARCH_ID             PX4_SOC_ARCH_ID_SAMV7
+
 #    // Fixme: using ??
-#    define PX4_BBSRAM_SIZE          2048
-#    define PX4_BBSRAM_GETDESC_IOCTL 0
-#    define PX4_NUMBER_I2C_BUSES     SAMV7_NTWIHS
+#    define PX4_BBSRAM_SIZE             2048
+#    define PX4_BBSRAM_GETDESC_IOCTL    0
+#    define PX4_NUMBER_I2C_BUSES        SAMV7_NTWIHS
 
 //todo:define this for Atmel and add loader.
 /* Atmel defines the 128 bit UUID as

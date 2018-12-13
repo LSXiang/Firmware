@@ -63,7 +63,6 @@
 #include <drivers/drv_rc_input.h>
 #include <drivers/drv_pwm_output.h>
 #include <drivers/drv_sbus.h>
-#include <drivers/drv_gpio.h>
 #include <drivers/drv_hrt.h>
 #include <drivers/drv_mixer.h>
 
@@ -448,6 +447,8 @@ namespace
 {
 PX4IO	*g_dev = nullptr;
 }
+
+#define PX4IO_DEVICE_PATH	"/dev/px4io"
 
 PX4IO::PX4IO(device::Device *interface) :
 	CDev(PX4IO_DEVICE_PATH),
@@ -2008,7 +2009,7 @@ PX4IO::io_reg_modify(uint8_t page, uint8_t offset, uint16_t clearbits, uint16_t 
 int
 PX4IO::print_debug()
 {
-#ifdef CONFIG_ARCH_BOARD_PX4FMU_V2
+#ifdef CONFIG_ARCH_BOARD_PX4_FMU_V2
 	int io_fd = -1;
 
 	if (io_fd <= 0) {
@@ -2749,19 +2750,6 @@ PX4IO::ioctl(file *filep, int cmd, unsigned long arg)
 		ret = (arg == PWM_SERVO_ENTER_TEST_MODE || PWM_SERVO_EXIT_TEST_MODE) ? 0 : -EINVAL;
 		break;
 
-	case GPIO_RESET: {
-			ret = -EINVAL;
-			break;
-		}
-
-	case GPIO_SET:
-		ret = -EINVAL;
-		break;
-
-	case GPIO_CLEAR:
-		ret = -EINVAL;
-		break;
-
 	case MIXERIOCGETOUTPUTCOUNT:
 		*(unsigned *)arg = _max_actuators;
 		break;
@@ -3182,7 +3170,7 @@ test(void)
 		ret = write(fd, servos, sizeof(servos));
 
 		if (ret != (int)sizeof(servos)) {
-			err(1, "error writing PWM servo data, wrote %lu got %d", sizeof(servos), ret);
+			err(1, "error writing PWM servo data, wrote %zu got %d", sizeof(servos), ret);
 		}
 
 		if (direction > 0) {

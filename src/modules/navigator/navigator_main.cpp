@@ -110,6 +110,9 @@ Navigator::Navigator() :
 	_navigation_mode_array[8] = &_land;
 	_navigation_mode_array[9] = &_precland;
 	_navigation_mode_array[10] = &_follow_target;
+
+	_handle_back_trans_dec_mss = param_find("VT_B_DEC_MSS");
+	_handle_reverse_delay = param_find("VT_B_REV_DEL");
 }
 
 void
@@ -162,6 +165,14 @@ Navigator::params_update()
 	parameter_update_s param_update;
 	orb_copy(ORB_ID(parameter_update), _param_update_sub, &param_update);
 	updateParams();
+
+	if (_handle_back_trans_dec_mss != PARAM_INVALID) {
+		param_get(_handle_back_trans_dec_mss, &_param_back_trans_dec_mss);
+	}
+
+	if (_handle_reverse_delay != PARAM_INVALID) {
+		param_get(_handle_reverse_delay, &_param_reverse_delay);
+	}
 }
 
 void
@@ -317,8 +328,17 @@ Navigator::run()
 				rep->current.loiter_radius = get_loiter_radius();
 				rep->current.loiter_direction = 1;
 				rep->current.type = position_setpoint_s::SETPOINT_TYPE_LOITER;
-				rep->current.cruising_speed = get_cruising_speed();
+
+				// If no argument for ground speed, use default value.
+				if (cmd.param1 <= 0 || !PX4_ISFINITE(cmd.param1)) {
+					rep->current.cruising_speed = get_cruising_speed();
+
+				} else {
+					rep->current.cruising_speed = cmd.param1;
+				}
+
 				rep->current.cruising_throttle = get_cruising_throttle();
+				rep->current.acceptance_radius = get_acceptance_radius();
 
 				// Go on and check which changes had been requested
 				if (PX4_ISFINITE(cmd.param4)) {

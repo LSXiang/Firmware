@@ -57,7 +57,6 @@
 #include <px4_tasks.h>
 #include <drivers/drv_hrt.h>
 #include <drivers/device/device.h>
-#include <drivers/drv_gps.h>
 #include <uORB/uORB.h>
 #include <uORB/topics/vehicle_gps_position.h>
 #include <uORB/topics/satellite_info.h>
@@ -179,6 +178,7 @@ GPSSIM::GPSSIM(bool fake_gps, bool enable_sat_info,
 	/* we need this potentially before it could be set in task_main */
 	g_dev = this;
 	_report_gps_pos.heading = NAN;
+	_report_gps_pos.heading_offset = NAN;
 
 	/* create satellite info data object if requested */
 	if (enable_sat_info) {

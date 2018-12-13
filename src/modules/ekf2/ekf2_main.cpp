@@ -132,7 +132,7 @@ private:
 	 * Update the internal state estimate for a blended GPS solution that is a weighted average of the phsyical
 	 * receiver solutions. This internal state cannot be used directly by estimators because if physical receivers
 	 * have significant position differences, variation in receiver estimated accuracy will cause undesirable
-	 * variation in the position soution.
+	 * variation in the position solution.
 	*/
 	bool blend_gps_data();
 
@@ -159,6 +159,11 @@ private:
 	 Calculate GPS output that is a blend of the offset corrected physical receiver data
 	*/
 	void calc_gps_blend_output();
+
+	/*
+	 * Calculate filtered WGS84 height from estimated AMSL height
+	 */
+	float filter_altitude_ellipsoid(float amsl_hgt);
 
 	bool 	_replay_mode = false;			///< true when we use replay data from a log
 
@@ -242,6 +247,10 @@ private:
 	uint8_t _gps_slowest_index = 0;			///< index of the physical receiver with the slowest update rate
 	float _gps_dt[GPS_MAX_RECEIVERS] = {};		///< average time step in seconds.
 	bool  _gps_new_output_data = false;		///< true if there is new output data for the EKF
+
+	int32_t _gps_alttitude_ellipsoid[GPS_MAX_RECEIVERS] {};	///< altitude in 1E-3 meters (millimeters) above ellipsoid
+	uint64_t _gps_alttitude_ellipsoid_previous_timestamp[GPS_MAX_RECEIVERS] {}; ///< storage for previous timestamp to compute dt
+	float   _wgs84_hgt_offset = 0;  ///< height offset between AMSL and WGS84
 
 	int _airdata_sub{-1};
 	int _airspeed_sub{-1};
@@ -965,6 +974,8 @@ void Ekf2::run()
 				_gps_state[0].lat = gps.lat;
 				_gps_state[0].lon = gps.lon;
 				_gps_state[0].alt = gps.alt;
+				_gps_state[0].yaw = gps.heading;
+				_gps_state[0].yaw_offset = gps.heading_offset;
 				_gps_state[0].fix_type = gps.fix_type;
 				_gps_state[0].eph = gps.eph;
 				_gps_state[0].epv = gps.epv;
@@ -977,6 +988,7 @@ void Ekf2::run()
 				_gps_state[0].nsats = gps.satellites_used;
 				//TODO: add gdop to gps topic
 				_gps_state[0].gdop = 0.0f;
+				_gps_alttitude_ellipsoid[0] = gps.alt_ellipsoid;
 
 				ekf2_timestamps.gps_timestamp_rel = (int16_t)((int64_t)gps.timestamp / 100 - (int64_t)ekf2_timestamps.timestamp / 100);
 			}
@@ -994,6 +1006,8 @@ void Ekf2::run()
 				_gps_state[1].lat = gps.lat;
 				_gps_state[1].lon = gps.lon;
 				_gps_state[1].alt = gps.alt;
+				_gps_state[1].yaw = gps.heading;
+				_gps_state[1].yaw_offset = gps.heading_offset;
 				_gps_state[1].fix_type = gps.fix_type;
 				_gps_state[1].eph = gps.eph;
 				_gps_state[1].epv = gps.epv;
@@ -1006,6 +1020,7 @@ void Ekf2::run()
 				_gps_state[1].nsats = gps.satellites_used;
 				//TODO: add gdop to gps topic
 				_gps_state[1].gdop = 0.0f;
+				_gps_alttitude_ellipsoid[1] = gps.alt_ellipsoid;
 			}
 		}
 
@@ -1074,6 +1089,8 @@ void Ekf2::run()
 				gps.vel_d_m_s = _gps_output[_gps_select_index].vel_ned[2];
 				gps.vel_ned_valid = _gps_output[_gps_select_index].vel_ned_valid;
 				gps.satellites_used = _gps_output[_gps_select_index].nsats;
+				gps.heading = _gps_output[_gps_select_index].yaw;
+				gps.heading_offset = _gps_output[_gps_select_index].yaw_offset;
 				gps.selected = _gps_select_index;
 
 				// Publish to the EKF blended GPS topic
@@ -1393,6 +1410,7 @@ void Ekf2::run()
 					global_pos.lat_lon_reset_counter = lpos.xy_reset_counter;
 
 					global_pos.alt = -lpos.z + lpos.ref_alt; // Altitude AMSL in meters
+					global_pos.alt_ellipsoid = filter_altitude_ellipsoid(global_pos.alt);
 
 					// global altitude has opposite sign of local down position
 					global_pos.delta_alt = -lpos.delta_z;
@@ -1512,7 +1530,7 @@ void Ekf2::run()
 			{
 				/* Check and save learned magnetometer bias estimates */
 
-				// Check if conditions are OK to for learning of magnetometer bias values
+				// Check if conditions are OK for learning of magnetometer bias values
 				if (!vehicle_land_detected.landed && // not on ground
 				    (vehicle_status.arming_state == vehicle_status_s::ARMING_STATE_ARMED) && // vehicle is armed
 				    !status.filter_fault_flags && // there are no filter faults
@@ -2032,7 +2050,7 @@ bool Ekf2::blend_gps_data()
  * Update the internal state estimate for a blended GPS solution that is a weighted average of the phsyical receiver solutions
  * with weights are calculated in calc_gps_blend_weights(). This internal state cannot be used directly by estimators
  * because if physical receivers have significant position differences,  variation in receiver estimated accuracy will
- * cause undesirable variation in the position soution.
+ * cause undesirable variation in the position solution.
 */
 void Ekf2::update_gps_blend_states()
 {
@@ -2165,6 +2183,19 @@ void Ekf2::update_gps_blend_states()
 	_gps_blended_state.lon = (int32_t)(1.0E7 * lon_deg_res);
 	_gps_blended_state.alt += (int32_t)blended_alt_offset_mm;
 
+	// Take GPS heading from the highest weighted receiver that is publishing a valid .heading value
+	uint8_t gps_best_yaw_index = 0;
+	best_weight = 0.0f;
+
+	for (uint8_t i = 0; i < GPS_MAX_RECEIVERS; i++) {
+		if (PX4_ISFINITE(_gps_state[i].yaw) && (_blend_weights[i] > best_weight)) {
+			best_weight = _blend_weights[i];
+			gps_best_yaw_index = i;
+		}
+	}
+
+	_gps_blended_state.yaw = _gps_state[gps_best_yaw_index].yaw;
+	_gps_blended_state.yaw_offset = _gps_state[gps_best_yaw_index].yaw_offset;
 }
 
 /*
@@ -2266,6 +2297,9 @@ void Ekf2::apply_gps_offsets()
 		_gps_output[i].gdop		= _gps_state[i].gdop;
 		_gps_output[i].nsats		= _gps_state[i].nsats;
 		_gps_output[i].vel_ned_valid	= _gps_state[i].vel_ned_valid;
+		_gps_output[i].yaw		= _gps_state[i].yaw;
+		_gps_output[i].yaw_offset	= _gps_state[i].yaw_offset;
+
 	}
 }
 
@@ -2325,9 +2359,32 @@ void Ekf2::calc_gps_blend_output()
 	_gps_output[GPS_BLENDED_INSTANCE].gdop		= _gps_blended_state.gdop;
 	_gps_output[GPS_BLENDED_INSTANCE].nsats		= _gps_blended_state.nsats;
 	_gps_output[GPS_BLENDED_INSTANCE].vel_ned_valid	= _gps_blended_state.vel_ned_valid;
+	_gps_output[GPS_BLENDED_INSTANCE].yaw		= _gps_blended_state.yaw;
+	_gps_output[GPS_BLENDED_INSTANCE].yaw_offset	= _gps_blended_state.yaw_offset;
 
 }
 
+float Ekf2::filter_altitude_ellipsoid(float amsl_hgt)
+{
+
+	float height_diff = static_cast<float>(_gps_alttitude_ellipsoid[0]) * 1e-3f - amsl_hgt;
+
+	if (_gps_alttitude_ellipsoid_previous_timestamp[0] == 0) {
+
+		_wgs84_hgt_offset = height_diff;
+		_gps_alttitude_ellipsoid_previous_timestamp[0] = _gps_state[0].time_usec;
+
+	} else if (_gps_state[0].time_usec != _gps_alttitude_ellipsoid_previous_timestamp[0]) {
+
+		// apply a 10 second first order low pass filter to baro offset
+		float dt = 1e-6f * static_cast<float>(_gps_state[0].time_usec - _gps_alttitude_ellipsoid_previous_timestamp[0]);
+		_gps_alttitude_ellipsoid_previous_timestamp[0] = _gps_state[0].time_usec;
+		float offset_rate_correction = 0.1f * (height_diff - _wgs84_hgt_offset);
+		_wgs84_hgt_offset += dt * math::constrain(offset_rate_correction, -0.1f, 0.1f);
+	}
+
+	return amsl_hgt + _wgs84_hgt_offset;
+}
 
 Ekf2 *Ekf2::instantiate(int argc, char *argv[])
 {
